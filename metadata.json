@@ -1,0 +1,6 @@
+{
+  "name": "ARMASNAKE",
+  "description": "ARMASNAKE — LOUFFI EDITION: Mobile-first 3D physical board game featuring 16 unlocked stages (8 original solo stages + 8 dual-armadillo co-op stages), on-screen virtual joysticks, predator snakes, 7araka special shield, and rich sound design.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
