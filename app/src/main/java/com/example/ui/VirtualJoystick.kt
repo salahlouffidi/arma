@@ -2,10 +2,15 @@ package com.example.ui
 
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.Surface
+import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
@@ -23,8 +28,10 @@ import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import kotlin.math.atan2
 import kotlin.math.cos
 import kotlin.math.sin
@@ -50,6 +57,8 @@ fun VirtualJoystick(
     modifier: Modifier = Modifier,
     size: Dp = 130.dp,
     isBlueTheme: Boolean = false,
+    primaryColor: Color? = null,
+    accentColor: Color? = null,
     testTag: String = "virtual_joystick",
     label: String? = null,
     onMove: (inputX: Float, inputY: Float) -> Unit
@@ -60,6 +69,9 @@ fun VirtualJoystick(
     val baseRadiusPx = sizePx * 0.44f
     val maxDragRadiusPx = baseRadiusPx * 0.72f
     val knobRadiusPx = sizePx * 0.20f
+
+    val effectivePrimary = primaryColor ?: if (isBlueTheme) Color(0xFF00E5FF) else Color(0xFFFFD54F)
+    val effectiveAccent = accentColor ?: if (isBlueTheme) Color(0xFF0091EA) else Color(0xFFD4AF37)
 
     var knobOffsetX by remember { mutableFloatStateOf(0f) }
     var knobOffsetY by remember { mutableFloatStateOf(0f) }
@@ -312,6 +324,25 @@ fun VirtualJoystick(
                 radius = knobRadiusPx * 0.14f,
                 center = knobCenter
             )
+        }
+
+        if (label != null) {
+            Surface(
+                modifier = Modifier
+                    .align(Alignment.BottomCenter)
+                    .padding(bottom = 2.dp),
+                shape = RoundedCornerShape(6.dp),
+                color = Color(0xDD140B06),
+                border = BorderStroke(1.dp, effectivePrimary.copy(alpha = 0.85f))
+            ) {
+                Text(
+                    text = label,
+                    color = effectivePrimary,
+                    fontSize = 9.sp,
+                    fontWeight = FontWeight.Black,
+                    modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                )
+            }
         }
     }
 }

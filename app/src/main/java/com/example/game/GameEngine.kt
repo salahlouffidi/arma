@@ -67,6 +67,12 @@ class GameEngine(
     var stats = GameStats()
         private set
 
+    var currentMatchConfig: MatchConfig = MatchConfig.solo()
+        private set
+
+    var snakeCatches: Int = 0
+        private set
+
     // Fruits collected since last special event trigger (triggers every 4 collected fruits)
     var fruitsCollectedSinceEvent = 0
         private set
@@ -99,29 +105,46 @@ class GameEngine(
         setupObstaclesForStage(currentStage)
     }
 
-    fun loadStage(stage: StageConfig) {
+    fun loadStage(stage: StageConfig, config: MatchConfig = currentMatchConfig) {
         currentStage = stage
+        currentMatchConfig = config
         stageFruitsCollected = 0
+        snakeCatches = 0
         isStageCompleted = false
         timeAliveSeconds = 0f
         fruitsCollectedSinceEvent = 0
         bannerMessage = null
         bannerTimer = 0f
 
-        val isDual = stage.isDualArmadillo
-        val a1Start = if (isDual) Vector2(-boardHalfWidth * 0.38f, 0f) else Vector2(0f, 0f)
+        val isDual = if (config.isSolo) {
+            stage.isDualArmadillo
+        } else {
+            config.getSlot(CharacterId.ARMADILLO_2).roleType != RoleType.DISABLED
+        }
+
+        val a1Active = if (config.isSolo) true else config.getSlot(CharacterId.ARMADILLO_1).roleType != RoleType.DISABLED
+        val a1Start = if (isDual && a1Active) Vector2(-boardHalfWidth * 0.38f, 0f) else Vector2(0f, 0f)
 
         // Reset Original Armadillo 1
-        armadillo = ArmadilloState(
-            pos = a1Start,
-            vel = Vector2(0f, 0f),
-            radius = 28f,
-            headingAngle = 0f,
-            invulnerableTimer = 2.0f,
-            isPowerActive = false,
-            powerTimer = 0f,
-            powerChancesRemaining = 0
-        )
+        armadillo = if (a1Active) {
+            ArmadilloState(
+                pos = a1Start,
+                vel = Vector2(0f, 0f),
+                radius = 28f,
+                headingAngle = 0f,
+                invulnerableTimer = 2.0f,
+                isPowerActive = false,
+                powerTimer = 0f,
+                powerChancesRemaining = 0
+            )
+        } else {
+            ArmadilloState(
+                pos = Vector2(-9999f, -9999f),
+                radius = 0f,
+                isEaten = true,
+                eatenScale = 0f
+            )
+        }
 
         // Initialize or Clear Second Blue Armadillo 2
         armadillo2 = if (isDual) {
@@ -139,41 +162,82 @@ class GameEngine(
             null
         }
 
-        // Initialize Snakes based on stage configuration
+        // Initialize Snakes based on stage configuration or multiplayer config
         snakes.clear()
         val s1Head = Vector2(boardHalfWidth * 0.65f, boardHalfHeight * 0.65f)
-        val s1 = SnakeState(
-            headPos = s1Head,
-            headAngle = 3.14f,
-            baseSpeed = stage.baseSnakeSpeed,
-            currentSpeed = stage.baseSnakeSpeed,
-            bodySegments = List(16) { Vector2(s1Head.x + it * 18f, s1Head.y) }
-        )
-        snakes.add(s1)
-        snake = s1
 
-        if (stage.snakeCount >= 2) {
-            val s2Head = Vector2(-boardHalfWidth * 0.65f, -boardHalfHeight * 0.65f)
-            val s2 = SnakeState(
-                headPos = s2Head,
-                headAngle = 0f,
-                baseSpeed = stage.baseSnakeSpeed * 0.92f,
-                currentSpeed = stage.baseSnakeSpeed * 0.92f,
-                bodySegments = List(16) { Vector2(s2Head.x - it * 18f, s2Head.y) }
+        if (config.isSolo) {
+            val s1 = SnakeState(
+                headPos = s1Head,
+                headAngle = 3.14f,
+                baseSpeed = stage.baseSnakeSpeed,
+                currentSpeed = stage.baseSnakeSpeed,
+                bodySegments = List(16) { Vector2(s1Head.x + it * 18f, s1Head.y) }
             )
-            snakes.add(s2)
-        }
+            snakes.add(s1)
+            snake = s1
 
-        if (stage.snakeCount >= 3) {
-            val s3Head = Vector2(-boardHalfWidth * 0.65f, boardHalfHeight * 0.65f)
-            val s3 = SnakeState(
-                headPos = s3Head,
-                headAngle = 1.57f,
-                baseSpeed = stage.baseSnakeSpeed * 0.96f,
-                currentSpeed = stage.baseSnakeSpeed * 0.96f,
-                bodySegments = List(16) { Vector2(s3Head.x - it * 18f, s3Head.y) }
-            )
-            snakes.add(s3)
+            if (stage.snakeCount >= 2) {
+                val s2Head = Vector2(-boardHalfWidth * 0.65f, -boardHalfHeight * 0.65f)
+                val s2 = SnakeState(
+                    headPos = s2Head,
+                    headAngle = 0f,
+                    baseSpeed = stage.baseSnakeSpeed * 0.92f,
+                    currentSpeed = stage.baseSnakeSpeed * 0.92f,
+                    bodySegments = List(16) { Vector2(s2Head.x - it * 18f, s2Head.y) }
+                )
+                snakes.add(s2)
+            }
+
+            if (stage.snakeCount >= 3) {
+                val s3Head = Vector2(-boardHalfWidth * 0.65f, boardHalfHeight * 0.65f)
+                val s3 = SnakeState(
+                    headPos = s3Head,
+                    headAngle = 1.57f,
+                    baseSpeed = stage.baseSnakeSpeed * 0.96f,
+                    currentSpeed = stage.baseSnakeSpeed * 0.96f,
+                    bodySegments = List(16) { Vector2(s3Head.x - it * 18f, s3Head.y) }
+                )
+                snakes.add(s3)
+            }
+        } else {
+            val s1Active = config.getSlot(CharacterId.SNAKE_1).roleType != RoleType.DISABLED
+            val s2Active = config.getSlot(CharacterId.SNAKE_2).roleType != RoleType.DISABLED
+
+            if (s1Active) {
+                val s1 = SnakeState(
+                    headPos = s1Head,
+                    headAngle = 3.14f,
+                    baseSpeed = stage.baseSnakeSpeed,
+                    currentSpeed = stage.baseSnakeSpeed,
+                    bodySegments = List(16) { Vector2(s1Head.x + it * 18f, s1Head.y) }
+                )
+                snakes.add(s1)
+            }
+
+            if (s2Active) {
+                val s2Head = Vector2(-boardHalfWidth * 0.65f, -boardHalfHeight * 0.65f)
+                val s2 = SnakeState(
+                    headPos = s2Head,
+                    headAngle = 0f,
+                    baseSpeed = stage.baseSnakeSpeed * 0.92f,
+                    currentSpeed = stage.baseSnakeSpeed * 0.92f,
+                    bodySegments = List(16) { Vector2(s2Head.x - it * 18f, s2Head.y) }
+                )
+                snakes.add(s2)
+            }
+
+            if (snakes.isEmpty()) {
+                val s1 = SnakeState(
+                    headPos = s1Head,
+                    headAngle = 3.14f,
+                    baseSpeed = stage.baseSnakeSpeed,
+                    currentSpeed = stage.baseSnakeSpeed,
+                    bodySegments = List(16) { Vector2(s1Head.x + it * 18f, s1Head.y) }
+                )
+                snakes.add(s1)
+            }
+            snake = snakes[0]
         }
 
         // Initialize Obstacles
@@ -184,15 +248,19 @@ class GameEngine(
         spawnStandardApples(3)
         particles.clear()
 
-        if (isDual) {
-            showBanner("🦔🔵 DUAL CO-OP: ${stage.name.uppercase()} — GOAL: ${stage.targetFruits} 🍎")
+        if (config.isSolo) {
+            if (isDual) {
+                showBanner("🦔🔵 DUAL CO-OP: ${stage.name.uppercase()} — GOAL: ${stage.targetFruits} 🍎")
+            } else {
+                showBanner("${stage.icon} STAGE ${stage.id}: ${stage.name.uppercase()} — GOAL: ${stage.targetFruits} 🍎")
+            }
         } else {
-            showBanner("${stage.icon} STAGE ${stage.id}: ${stage.name.uppercase()} — GOAL: ${stage.targetFruits} 🍎")
+            showBanner("${config.preset.icon} ${config.preset.title}: ${stage.name.uppercase()} — GOAL: ${stage.targetFruits} 🍎")
         }
     }
 
     fun resetGame() {
-        loadStage(currentStage)
+        loadStage(currentStage, currentMatchConfig)
     }
 
     private fun setupObstaclesForStage(stage: StageConfig) {
@@ -322,7 +390,17 @@ class GameEngine(
         }
     }
 
-    fun update(dt: Float, tiltX: Float, tiltY: Float, tiltX2: Float = 0f, tiltY2: Float = 0f) {
+    fun update(
+        dt: Float,
+        tiltX: Float,
+        tiltY: Float,
+        tiltX2: Float = 0f,
+        tiltY2: Float = 0f,
+        snake1InputX: Float = 0f,
+        snake1InputY: Float = 0f,
+        snake2InputX: Float = 0f,
+        snake2InputY: Float = 0f
+    ) {
         val clampedDt = dt.coerceIn(0.001f, 0.05f)
         timeAliveSeconds += clampedDt
 
@@ -333,12 +411,38 @@ class GameEngine(
             }
         }
 
-        updateArmadillo(clampedDt, tiltX, tiltY)
+        // Armadillo 1 input
+        val a1Active = if (currentMatchConfig.isSolo) true else currentMatchConfig.getSlot(CharacterId.ARMADILLO_1).roleType != RoleType.DISABLED
+        val a1IsHuman = currentMatchConfig.isSolo || currentMatchConfig.getSlot(CharacterId.ARMADILLO_1).roleType == RoleType.HUMAN
+
+        if (a1Active) {
+            val (effA1X, effA1Y) = if (a1IsHuman) {
+                tiltX to tiltY
+            } else {
+                val aiMove = computeArmadilloAiInput(armadillo)
+                aiMove.x to aiMove.y
+            }
+            updateArmadillo(clampedDt, effA1X, effA1Y)
+        }
+
         if (armadillo2 != null) {
-            updateArmadillo2(clampedDt, tiltX2, tiltY2)
+            val a2Active = if (currentMatchConfig.isSolo) true else currentMatchConfig.getSlot(CharacterId.ARMADILLO_2).roleType != RoleType.DISABLED
+            val a2IsHuman = if (currentMatchConfig.isSolo) true else currentMatchConfig.getSlot(CharacterId.ARMADILLO_2).roleType == RoleType.HUMAN
+
+            if (a2Active) {
+                val a2 = armadillo2!!
+                val (effA2X, effA2Y) = if (a2IsHuman) {
+                    tiltX2 to tiltY2
+                } else {
+                    val aiMove = computeArmadilloAiInput(a2)
+                    aiMove.x to aiMove.y
+                }
+                updateArmadillo2(clampedDt, effA2X, effA2Y)
+            }
+
             // Soft physical separation between armadillos
             val a2 = armadillo2
-            if (a2 != null && !armadillo.isEaten && !a2.isEaten) {
+            if (a2 != null && !armadillo.isEaten && !a2.isEaten && a1Active) {
                 val dist = armadillo.pos.distance(a2.pos)
                 val minDist = armadillo.radius + a2.radius
                 if (dist < minDist && dist > 0.001f) {
@@ -351,10 +455,38 @@ class GameEngine(
         }
 
         updateObstacles(clampedDt)
-        updateSnakes(clampedDt)
+        updateSnakes(clampedDt, snake1InputX, snake1InputY, snake2InputX, snake2InputY)
         updateApples(clampedDt)
         updateParticles(clampedDt)
         checkCollisions()
+    }
+
+    private fun computeArmadilloAiInput(arm: ArmadilloState): Vector2 {
+        if (arm.isEaten) return Vector2.Zero
+        var evadeVector = Vector2.Zero
+        var minThreatDist = Float.MAX_VALUE
+        for (s in snakes) {
+            val d = arm.pos.distance(s.headPos)
+            if (d < minThreatDist) {
+                minThreatDist = d
+                if (d < 160f && d > 0.001f) {
+                    evadeVector = (arm.pos - s.headPos).normalized()
+                }
+            }
+        }
+        if (minThreatDist < 125f) {
+            return evadeVector
+        }
+        val nearestApple = apples.minByOrNull { it.pos.distance(arm.pos) }
+        if (nearestApple != null) {
+            val toApple = (nearestApple.pos - arm.pos).normalized()
+            return if (minThreatDist < 180f) {
+                (toApple * 0.45f + evadeVector * 0.55f).normalized()
+            } else {
+                toApple
+            }
+        }
+        return Vector2.Zero
     }
 
     private fun updateObstacles(dt: Float) {
@@ -711,7 +843,13 @@ class GameEngine(
         )
     }
 
-    private fun updateSnakes(dt: Float) {
+    private fun updateSnakes(
+        dt: Float,
+        snake1InputX: Float = 0f,
+        snake1InputY: Float = 0f,
+        snake2InputX: Float = 0f,
+        snake2InputY: Float = 0f
+    ) {
         if (snakes.isEmpty()) return
 
         // Synchronize primary snake if modified externally
@@ -721,60 +859,82 @@ class GameEngine(
 
         for (sIdx in snakes.indices) {
             val curSnake = snakes[sIdx]
-            val targetSpeed = curSnake.baseSpeed * speedMultiplier
+            val isS1Human = !currentMatchConfig.isSolo && sIdx == 0 && currentMatchConfig.getSlot(CharacterId.SNAKE_1).roleType == RoleType.HUMAN
+            val isS2Human = !currentMatchConfig.isSolo && sIdx == 1 && currentMatchConfig.getSlot(CharacterId.SNAKE_2).roleType == RoleType.HUMAN
 
-            // Intelligent target selection: dynamically adapt to both armadillos
-            val a1Alive = !armadillo.isEaten
-            val a2 = armadillo2
-            val a2Alive = a2 != null && !a2.isEaten
+            val isHumanControlled = isS1Human || isS2Human
+            val inputX = if (isS1Human) snake1InputX else if (isS2Human) snake2InputX else 0f
+            val inputY = if (isS1Human) snake1InputY else if (isS2Human) snake2InputY else 0f
+            val inputMag = sqrt(inputX * inputX + inputY * inputY)
 
-            val targetPos = when {
-                a1Alive && a2Alive -> {
-                    // Both armadillos are alive!
-                    if (snakes.size >= 2) {
-                        if (sIdx == 0) {
-                            // Snake 0 targets the closest armadillo to Snake 0
-                            val d1 = curSnake.headPos.distance(armadillo.pos)
-                            val d2 = curSnake.headPos.distance(a2!!.pos)
-                            if (d1 <= d2) armadillo.pos else a2.pos
-                        } else if (sIdx == 1) {
-                            // Snake 1 coordinates pincer: hunts the other armadillo!
-                            val d1 = snakes[0].headPos.distance(armadillo.pos)
-                            val d2 = snakes[0].headPos.distance(a2!!.pos)
-                            if (d1 <= d2) a2.pos else armadillo.pos
+            val targetSpeed: Float
+            val newHeadAngle: Float
+
+            if (isHumanControlled) {
+                if (inputMag > 0.08f) {
+                    val desiredAngle = atan2(inputY, inputX)
+                    val angleDiff = normalizeAngle(desiredAngle - curSnake.headAngle)
+                    val turnRate = 4.2f
+                    val maxTurn = turnRate * dt
+                    val headTurn = angleDiff.coerceIn(-maxTurn, maxTurn)
+                    newHeadAngle = curSnake.headAngle + headTurn
+                    targetSpeed = curSnake.baseSpeed * (0.55f + 0.70f * inputMag.coerceAtMost(1f))
+                } else {
+                    newHeadAngle = curSnake.headAngle
+                    targetSpeed = curSnake.baseSpeed * 0.25f
+                }
+            } else {
+                targetSpeed = curSnake.baseSpeed * speedMultiplier
+
+                // Intelligent target selection: dynamically adapt to both armadillos
+                val a1Alive = !armadillo.isEaten && (currentMatchConfig.isSolo || currentMatchConfig.getSlot(CharacterId.ARMADILLO_1).roleType != RoleType.DISABLED)
+                val a2 = armadillo2
+                val a2Alive = a2 != null && !a2.isEaten && (currentMatchConfig.isSolo || currentMatchConfig.getSlot(CharacterId.ARMADILLO_2).roleType != RoleType.DISABLED)
+
+                val targetPos = when {
+                    a1Alive && a2Alive -> {
+                        // Both armadillos are alive!
+                        if (snakes.size >= 2) {
+                            if (sIdx == 0) {
+                                val d1 = curSnake.headPos.distance(armadillo.pos)
+                                val d2 = curSnake.headPos.distance(a2!!.pos)
+                                if (d1 <= d2) armadillo.pos else a2.pos
+                            } else if (sIdx == 1) {
+                                val d1 = snakes[0].headPos.distance(armadillo.pos)
+                                val d2 = snakes[0].headPos.distance(a2!!.pos)
+                                if (d1 <= d2) a2.pos else armadillo.pos
+                            } else {
+                                val d1 = curSnake.headPos.distance(armadillo.pos)
+                                val d2 = curSnake.headPos.distance(a2!!.pos)
+                                if (d1 <= d2) armadillo.pos else a2.pos
+                            }
                         } else {
-                            // Snake 3 (Stage 16) targets closest armadillo
                             val d1 = curSnake.headPos.distance(armadillo.pos)
                             val d2 = curSnake.headPos.distance(a2!!.pos)
                             if (d1 <= d2) armadillo.pos else a2.pos
                         }
-                    } else {
-                        // Single snake: dynamically hunts whichever armadillo is closest to its head
-                        val d1 = curSnake.headPos.distance(armadillo.pos)
-                        val d2 = curSnake.headPos.distance(a2!!.pos)
-                        if (d1 <= d2) armadillo.pos else a2.pos
                     }
+                    a1Alive -> armadillo.pos
+                    a2Alive -> a2!!.pos
+                    else -> Vector2(0f, 0f)
                 }
-                a1Alive -> armadillo.pos
-                a2Alive -> a2!!.pos
-                else -> Vector2(0f, 0f)
+
+                val toTarget = targetPos - curSnake.headPos
+                var desiredAngle = atan2(toTarget.y, toTarget.x)
+
+                // Secondary snake stalks with offset angle to surround target
+                if (sIdx == 1 && !a2Alive) {
+                    desiredAngle = normalizeAngle(desiredAngle + 0.35f * sin(timeAliveSeconds * 2f))
+                }
+
+                val angleDiff = normalizeAngle(desiredAngle - curSnake.headAngle)
+
+                // Smooth steering rate limit
+                val turnRate = 2.4f + (speedMultiplier - 1f) * 0.6f
+                val maxTurn = turnRate * dt
+                val headTurn = angleDiff.coerceIn(-maxTurn, maxTurn)
+                newHeadAngle = curSnake.headAngle + headTurn
             }
-
-            val toTarget = targetPos - curSnake.headPos
-            var desiredAngle = atan2(toTarget.y, toTarget.x)
-
-            // Secondary snake stalks with offset angle to surround target
-            if (sIdx == 1 && !a2Alive) {
-                desiredAngle = normalizeAngle(desiredAngle + 0.35f * sin(timeAliveSeconds * 2f))
-            }
-
-            val angleDiff = normalizeAngle(desiredAngle - curSnake.headAngle)
-
-            // Smooth steering rate limit
-            val turnRate = 2.4f + (speedMultiplier - 1f) * 0.6f
-            val maxTurn = turnRate * dt
-            val headTurn = angleDiff.coerceIn(-maxTurn, maxTurn)
-            val newHeadAngle = curSnake.headAngle + headTurn
 
             // Advance head with slithering motion
             val forwardDir = Vector2(cos(newHeadAngle), sin(newHeadAngle))
@@ -1143,6 +1303,14 @@ class GameEngine(
                         snakes[sIdx] = strikingSnake
                         if (sIdx == 0) snake = strikingSnake
 
+                        snakeCatches++
+                        if (!currentMatchConfig.isSolo) {
+                            val snakeP = if (sIdx == 0) currentMatchConfig.getPlayerForCharacter(CharacterId.SNAKE_1) else currentMatchConfig.getPlayerForCharacter(CharacterId.SNAKE_2)
+                            if (snakeP != null) {
+                                showBanner("🐍 P$snakeP CAUGHT ARMADILLO 1!")
+                            }
+                        }
+
                         spawnEatenParticles(armadillo.pos)
                     }
                     break
@@ -1201,6 +1369,14 @@ class GameEngine(
                         )
                         snakes[sIdx] = strikingSnake
                         if (sIdx == 0) snake = strikingSnake
+
+                        snakeCatches++
+                        if (!currentMatchConfig.isSolo) {
+                            val snakeP = if (sIdx == 0) currentMatchConfig.getPlayerForCharacter(CharacterId.SNAKE_1) else currentMatchConfig.getPlayerForCharacter(CharacterId.SNAKE_2)
+                            if (snakeP != null) {
+                                showBanner("🐍 P$snakeP CAUGHT ARMADILLO 2!")
+                            }
+                        }
 
                         spawnEatenParticles(curA2.pos)
                     }

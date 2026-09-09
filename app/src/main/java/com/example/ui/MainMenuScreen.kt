@@ -56,7 +56,8 @@ fun MainMenuScreen(
     soundManager: SoundManager,
     onStartGame: (stageId: Int) -> Unit,
     onOpenStageSelect: () -> Unit,
-    onOpenAudioSettings: () -> Unit
+    onOpenAudioSettings: () -> Unit,
+    onOpenGameModeSelect: () -> Unit = onOpenStageSelect
 ) {
     var showHowToPlay by remember { mutableStateOf(false) }
 
@@ -145,11 +146,11 @@ fun MainMenuScreen(
                 horizontalArrangement = Arrangement.spacedBy(12.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                // Play Primary Button
+                // Play Primary Button -> Opens Game Mode selection
                 Button(
                     onClick = {
                         soundManager.playMenuClick()
-                        onStartGame(currentStageId)
+                        onOpenGameModeSelect()
                     },
                     colors = ButtonDefaults.buttonColors(
                         containerColor = Color(0xFFD4AF37),
@@ -168,7 +169,7 @@ fun MainMenuScreen(
                     )
                     Spacer(modifier = Modifier.width(6.dp))
                     Text(
-                        text = "PLAY STAGE $currentStageId",
+                        text = "PLAY / GAME MODE",
                         fontSize = 13.sp,
                         fontWeight = FontWeight.Black,
                         letterSpacing = 0.5.sp

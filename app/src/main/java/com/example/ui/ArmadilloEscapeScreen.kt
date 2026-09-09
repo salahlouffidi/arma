@@ -82,6 +82,9 @@ import com.example.game.HapticFeedbackHelper
 import com.example.game.SoundManager
 import com.example.game.StageConfig
 import com.example.game.StageProgressManager
+import com.example.game.MatchConfig
+import com.example.game.CharacterId
+import com.example.game.RoleType
 import com.example.game.TableRenderer
 import com.example.game.Vector2
 import kotlinx.coroutines.isActive
@@ -91,6 +94,8 @@ import kotlin.math.sqrt
 enum class GameScreenState {
     INTRO,
     MAIN_MENU,
+    GAME_MODE_SELECT,
+    MULTIPLAYER_CONFIG,
     STAGE_SELECT,
     GAMEPLAY
 }
@@ -113,7 +118,8 @@ fun ArmadilloEscapeScreen() {
     val progressManager = remember { StageProgressManager(context) }
     val soundManager = remember { SoundManager(context) }
 
-    var currentScreen by remember { mutableStateOf(GameScreenState.GAMEPLAY) }
+    var currentScreen by remember { mutableStateOf(GameScreenState.INTRO) }
+    var activeMatchConfig by remember { mutableStateOf(MatchConfig.solo()) }
     var showAudioSettings by remember { mutableStateOf(false) }
 
     var highestUnlockedStage by remember { mutableIntStateOf(progressManager.getHighestUnlockedStage()) }
@@ -125,9 +131,14 @@ fun ArmadilloEscapeScreen() {
     // P1 (Golden Armadillo)
     var joystickInputX by remember { mutableFloatStateOf(0f) }
     var joystickInputY by remember { mutableFloatStateOf(0f) }
-    // P2 (Blue Armadillo - Stages 9-16)
+    // P2 (Blue Armadillo - Stages 9-16 or Multiplayer)
     var joystickInputX2 by remember { mutableFloatStateOf(0f) }
     var joystickInputY2 by remember { mutableFloatStateOf(0f) }
+    // Snakes (Multiplayer human controls)
+    var snake1InputX by remember { mutableFloatStateOf(0f) }
+    var snake1InputY by remember { mutableFloatStateOf(0f) }
+    var snake2InputX by remember { mutableFloatStateOf(0f) }
+    var snake2InputY by remember { mutableFloatStateOf(0f) }
 
     // Game Engine
     val gameEngine = remember {
@@ -223,9 +234,18 @@ fun ArmadilloEscapeScreen() {
                 lastTime = now
                 frameTimeNanos = now
 
-                // Direct Virtual Joystick Finger Input driving armadillo physics
-                // P1 controls original golden armadillo; P2 controls blue armadillo in Stages 9–16
-                gameEngine.update(dt, joystickInputX, joystickInputY, joystickInputX2, joystickInputY2)
+                // Direct Virtual Joystick Finger Input driving armadillo and snake physics
+                gameEngine.update(
+                    dt = dt,
+                    tiltX = joystickInputX,
+                    tiltY = joystickInputY,
+                    tiltX2 = joystickInputX2,
+                    tiltY2 = joystickInputY2,
+                    snake1InputX = snake1InputX,
+                    snake1InputY = snake1InputY,
+                    snake2InputX = snake2InputX,
+                    snake2InputY = snake2InputY
+                )
                 tick++
 
                 val curScore = gameEngine.stats.score
@@ -256,13 +276,46 @@ fun ArmadilloEscapeScreen() {
                 soundManager = soundManager,
                 onStartGame = { stageId ->
                     currentStageId = stageId
-                    currentScreen = GameScreenState.GAMEPLAY
+                    currentScreen = GameScreenState.GAME_MODE_SELECT
                 },
                 onOpenStageSelect = {
-                    currentScreen = GameScreenState.STAGE_SELECT
+                    currentScreen = GameScreenState.GAME_MODE_SELECT
                 },
                 onOpenAudioSettings = {
                     showAudioSettings = true
+                },
+                onOpenGameModeSelect = {
+                    currentScreen = GameScreenState.GAME_MODE_SELECT
+                }
+            )
+        }
+        GameScreenState.GAME_MODE_SELECT -> {
+            GameModeSelectScreen(
+                soundManager = soundManager,
+                onSelectSolo = {
+                    activeMatchConfig = MatchConfig.solo()
+                    gameEngine.loadStage(StageConfig.getStage(currentStageId), activeMatchConfig)
+                    currentScreen = GameScreenState.STAGE_SELECT
+                },
+                onSelectMultiplayer = {
+                    currentScreen = GameScreenState.MULTIPLAYER_CONFIG
+                },
+                onBackToMenu = {
+                    currentScreen = GameScreenState.MAIN_MENU
+                }
+            )
+        }
+        GameScreenState.MULTIPLAYER_CONFIG -> {
+            MultiplayerModeScreen(
+                soundManager = soundManager,
+                initialConfig = activeMatchConfig,
+                onConfirmMatchConfig = { config ->
+                    activeMatchConfig = config
+                    gameEngine.loadStage(StageConfig.getStage(currentStageId), config)
+                    currentScreen = GameScreenState.STAGE_SELECT
+                },
+                onBackToGameModeSelect = {
+                    currentScreen = GameScreenState.GAME_MODE_SELECT
                 }
             )
         }
@@ -273,10 +326,25 @@ fun ArmadilloEscapeScreen() {
                 soundManager = soundManager,
                 onSelectStage = { stageId ->
                     currentStageId = stageId
+                    val stage = StageConfig.getStage(stageId)
+                    gameEngine.loadStage(stage, activeMatchConfig)
+                    // Reset input vectors
+                    joystickInputX = 0f
+                    joystickInputY = 0f
+                    joystickInputX2 = 0f
+                    joystickInputY2 = 0f
+                    snake1InputX = 0f
+                    snake1InputY = 0f
+                    snake2InputX = 0f
+                    snake2InputY = 0f
                     currentScreen = GameScreenState.GAMEPLAY
                 },
                 onBackToMenu = {
-                    currentScreen = GameScreenState.MAIN_MENU
+                    if (activeMatchConfig.isSolo) {
+                        currentScreen = GameScreenState.GAME_MODE_SELECT
+                    } else {
+                        currentScreen = GameScreenState.MULTIPLAYER_CONFIG
+                    }
                 }
             )
         }
@@ -629,43 +697,245 @@ fun ArmadilloEscapeScreen() {
         }
 
         // ==================== VIRTUAL JOYSTICKS ====================
-        val isDual = gameEngine.isDualArmadillo
-        if (isDual) {
-            // Dual Armadillo Joysticks: Left = Golden P1, Right = Blue P2
-            VirtualJoystick(
-                modifier = Modifier
-                    .align(Alignment.BottomStart)
-                    .padding(start = 18.dp, bottom = 12.dp),
-                size = 122.dp,
-                label = "P1 GOLDEN",
-                isBlueTheme = false,
-                testTag = "virtual_joystick_p1",
-                onMove = { normX, normY ->
-                    joystickInputX = normX
-                    joystickInputY = normY
-                }
-            )
+        if (activeMatchConfig.isSolo) {
+            val isDual = gameEngine.isDualArmadillo
+            if (isDual) {
+                // Dual Armadillo Joysticks: Left = Golden P1, Right = Blue P2
+                VirtualJoystick(
+                    modifier = Modifier
+                        .align(Alignment.BottomStart)
+                        .padding(start = 18.dp, bottom = 12.dp),
+                    size = 122.dp,
+                    label = "P1 GOLDEN",
+                    isBlueTheme = false,
+                    testTag = "virtual_joystick_p1",
+                    onMove = { normX, normY ->
+                        joystickInputX = normX
+                        joystickInputY = normY
+                    }
+                )
 
-            VirtualJoystick(
-                modifier = Modifier
-                    .align(Alignment.BottomEnd)
-                    .padding(end = 18.dp, bottom = 12.dp),
-                size = 122.dp,
-                label = "P2 BLUE",
-                isBlueTheme = true,
-                testTag = "virtual_joystick_p2",
-                onMove = { normX, normY ->
-                    joystickInputX2 = normX
-                    joystickInputY2 = normY
-                }
-            )
+                VirtualJoystick(
+                    modifier = Modifier
+                        .align(Alignment.BottomEnd)
+                        .padding(end = 18.dp, bottom = 12.dp),
+                    size = 122.dp,
+                    label = "P2 BLUE",
+                    isBlueTheme = true,
+                    testTag = "virtual_joystick_p2",
+                    onMove = { normX, normY ->
+                        joystickInputX2 = normX
+                        joystickInputY2 = normY
+                    }
+                )
 
-            // ==================== CONTROLS: BOTTOM BAR (DUAL MODE) ====================
+                // ==================== CONTROLS: BOTTOM BAR (DUAL MODE) ====================
+                Row(
+                    modifier = Modifier
+                        .align(Alignment.BottomCenter)
+                        .fillMaxWidth()
+                        .padding(horizontal = 145.dp, vertical = 8.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Surface(
+                        color = Color(0xD91E120A),
+                        shape = RoundedCornerShape(14.dp),
+                        border = androidx.compose.foundation.BorderStroke(1.dp, Color(0x50D4AF37))
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(
+                                text = "🕹️ LEFT: GOLDEN  |  RIGHT: BLUE 🕹️",
+                                color = Color(0xFFFFE0B2),
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.Bold,
+                                letterSpacing = 0.4.sp
+                            )
+                        }
+                    }
+
+                    Button(
+                        onClick = {
+                            showStageSelector = true
+                            haptics.click()
+                        },
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = Color(0xFF3E2312),
+                            contentColor = Color(0xFFFFD54F)
+                        ),
+                        shape = RoundedCornerShape(12.dp),
+                        border = androidx.compose.foundation.BorderStroke(1.dp, Color(0x60D4AF37)),
+                        modifier = Modifier
+                            .height(36.dp)
+                            .testTag("stages_menu_trigger_button")
+                    ) {
+                        Text(
+                            text = "🏆 STAGES",
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.Bold,
+                            letterSpacing = 0.5.sp
+                        )
+                    }
+                }
+            } else {
+                // Single Joystick (Original Stages 1–8)
+                VirtualJoystick(
+                    modifier = Modifier
+                        .align(Alignment.BottomStart)
+                        .padding(start = 22.dp, bottom = 12.dp),
+                    size = 126.dp,
+                    label = "MOVE",
+                    isBlueTheme = false,
+                    testTag = "virtual_joystick",
+                    onMove = { normX, normY ->
+                        joystickInputX = normX
+                        joystickInputY = normY
+                    }
+                )
+
+                // ==================== CONTROLS: BOTTOM BAR (SINGLE MODE) ====================
+                Row(
+                    modifier = Modifier
+                        .align(Alignment.BottomCenter)
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp, vertical = 8.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    // Space reservation for the left-aligned VirtualJoystick
+                    Spacer(modifier = Modifier.width(140.dp))
+
+                    // Steering Instruction Pill
+                    Surface(
+                        color = Color(0xD91E120A),
+                        shape = RoundedCornerShape(14.dp),
+                        border = androidx.compose.foundation.BorderStroke(1.dp, Color(0x50D4AF37))
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(horizontal = 14.dp, vertical = 6.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.TouchApp,
+                                contentDescription = null,
+                                tint = Color(0xFFFFD54F),
+                                modifier = Modifier.size(14.dp)
+                            )
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text(
+                                text = "DRAG THE JOYSTICK TO MOVE",
+                                color = Color(0xFFFFE0B2),
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.Bold,
+                                letterSpacing = 0.5.sp
+                            )
+                        }
+                    }
+
+                    // Central / Right Action: STAGES Button
+                    Button(
+                        onClick = {
+                            showStageSelector = true
+                            haptics.click()
+                        },
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = Color(0xFF3E2312),
+                            contentColor = Color(0xFFFFD54F)
+                        ),
+                        shape = RoundedCornerShape(12.dp),
+                        border = androidx.compose.foundation.BorderStroke(1.dp, Color(0x60D4AF37)),
+                        modifier = Modifier
+                            .height(36.dp)
+                            .testTag("stages_menu_trigger_button")
+                    ) {
+                        Text(
+                            text = "🏆 STAGES",
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.Bold,
+                            letterSpacing = 0.5.sp
+                        )
+                    }
+                }
+            }
+        } else {
+            // ==================== MULTIPLAYER ACTIVE CONTROLS ====================
+            val slotA1 = activeMatchConfig.getSlot(CharacterId.ARMADILLO_1)
+            val slotA2 = activeMatchConfig.getSlot(CharacterId.ARMADILLO_2)
+            val slotS1 = activeMatchConfig.getSlot(CharacterId.SNAKE_1)
+            val slotS2 = activeMatchConfig.getSlot(CharacterId.SNAKE_2)
+            val humanCount = activeMatchConfig.activeHumanPlayers().size
+
+            // 1. Armadillo 1 Human Joystick
+            if (slotA1.roleType == RoleType.HUMAN) {
+                val isTop = humanCount >= 3 && slotA2.roleType == RoleType.HUMAN
+                VirtualJoystick(
+                    modifier = Modifier
+                        .align(if (isTop) Alignment.TopStart else Alignment.BottomStart)
+                        .padding(start = 16.dp, top = if (isTop) 64.dp else 0.dp, bottom = if (isTop) 0.dp else 12.dp),
+                    size = if (humanCount >= 3) 112.dp else 122.dp,
+                    label = "P${slotA1.playerNumber ?: 1} ARMADILLO 1",
+                    primaryColor = Color(0xFFFFB300),
+                    accentColor = Color(0xFFFF6F00),
+                    testTag = "multi_joystick_a1",
+                    onMove = { x, y -> joystickInputX = x; joystickInputY = y }
+                )
+            }
+
+            // 2. Armadillo 2 Human Joystick
+            if (slotA2.roleType == RoleType.HUMAN) {
+                VirtualJoystick(
+                    modifier = Modifier
+                        .align(Alignment.BottomStart)
+                        .padding(start = 16.dp, bottom = 12.dp),
+                    size = if (humanCount >= 3) 112.dp else 122.dp,
+                    label = "P${slotA2.playerNumber ?: 2} ARMADILLO 2",
+                    primaryColor = Color(0xFF29B6F6),
+                    accentColor = Color(0xFF0288D1),
+                    testTag = "multi_joystick_a2",
+                    onMove = { x, y -> joystickInputX2 = x; joystickInputY2 = y }
+                )
+            }
+
+            // 3. Snake 1 Human Joystick
+            if (slotS1.roleType == RoleType.HUMAN) {
+                val isTop = humanCount >= 3 && slotS2.roleType == RoleType.HUMAN
+                VirtualJoystick(
+                    modifier = Modifier
+                        .align(if (isTop) Alignment.TopEnd else Alignment.BottomEnd)
+                        .padding(end = 16.dp, top = if (isTop) 64.dp else 0.dp, bottom = if (isTop) 0.dp else 12.dp),
+                    size = if (humanCount >= 3) 112.dp else 122.dp,
+                    label = "P${slotS1.playerNumber ?: 1} SNAKE 1",
+                    primaryColor = Color(0xFF00E676),
+                    accentColor = Color(0xFF00B0FF),
+                    testTag = "multi_joystick_s1",
+                    onMove = { x, y -> snake1InputX = x; snake1InputY = y }
+                )
+            }
+
+            // 4. Snake 2 Human Joystick
+            if (slotS2.roleType == RoleType.HUMAN) {
+                VirtualJoystick(
+                    modifier = Modifier
+                        .align(Alignment.BottomEnd)
+                        .padding(end = 16.dp, bottom = 12.dp),
+                    size = if (humanCount >= 3) 112.dp else 122.dp,
+                    label = "P${slotS2.playerNumber ?: 2} SNAKE 2",
+                    primaryColor = Color(0xFFAB47BC),
+                    accentColor = Color(0xFFE91E63),
+                    testTag = "multi_joystick_s2",
+                    onMove = { x, y -> snake2InputX = x; snake2InputY = y }
+                )
+            }
+
+            // ==================== MULTIPLAYER BOTTOM BAR ====================
             Row(
                 modifier = Modifier
                     .align(Alignment.BottomCenter)
                     .fillMaxWidth()
-                    .padding(horizontal = 145.dp, vertical = 8.dp),
+                    .padding(horizontal = 135.dp, vertical = 8.dp),
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
@@ -679,7 +949,7 @@ fun ArmadilloEscapeScreen() {
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         Text(
-                            text = "🕹️ LEFT: GOLDEN  |  RIGHT: BLUE 🕹️",
+                            text = "${activeMatchConfig.preset.icon} ${activeMatchConfig.preset.title.uppercase()}",
                             color = Color(0xFFFFE0B2),
                             fontSize = 11.sp,
                             fontWeight = FontWeight.Bold,
@@ -688,106 +958,52 @@ fun ArmadilloEscapeScreen() {
                     }
                 }
 
-                Button(
-                    onClick = {
-                        showStageSelector = true
-                        haptics.click()
-                    },
-                    colors = ButtonDefaults.buttonColors(
-                        containerColor = Color(0xFF3E2312),
-                        contentColor = Color(0xFFFFD54F)
-                    ),
-                    shape = RoundedCornerShape(12.dp),
-                    border = androidx.compose.foundation.BorderStroke(1.dp, Color(0x60D4AF37)),
-                    modifier = Modifier
-                        .height(36.dp)
-                        .testTag("stages_menu_trigger_button")
-                ) {
-                    Text(
-                        text = "🏆 STAGES",
-                        fontSize = 11.sp,
-                        fontWeight = FontWeight.Bold,
-                        letterSpacing = 0.5.sp
-                    )
-                }
-            }
-        } else {
-            // Single Joystick (Original Stages 1–8)
-            VirtualJoystick(
-                modifier = Modifier
-                    .align(Alignment.BottomStart)
-                    .padding(start = 22.dp, bottom = 12.dp),
-                size = 126.dp,
-                label = "MOVE",
-                isBlueTheme = false,
-                testTag = "virtual_joystick",
-                onMove = { normX, normY ->
-                    joystickInputX = normX
-                    joystickInputY = normY
-                }
-            )
-
-            // ==================== CONTROLS: BOTTOM BAR (SINGLE MODE) ====================
-            Row(
-                modifier = Modifier
-                    .align(Alignment.BottomCenter)
-                    .fillMaxWidth()
-                    .padding(horizontal = 16.dp, vertical = 8.dp),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                // Space reservation for the left-aligned VirtualJoystick
-                Spacer(modifier = Modifier.width(140.dp))
-
-                // Steering Instruction Pill
-                Surface(
-                    color = Color(0xD91E120A),
-                    shape = RoundedCornerShape(14.dp),
-                    border = androidx.compose.foundation.BorderStroke(1.dp, Color(0x50D4AF37))
-                ) {
-                    Row(
-                        modifier = Modifier.padding(horizontal = 14.dp, vertical = 6.dp),
-                        verticalAlignment = Alignment.CenterVertically
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Button(
+                        onClick = {
+                            currentScreen = GameScreenState.MULTIPLAYER_CONFIG
+                            haptics.click()
+                        },
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = Color(0xFF261408),
+                            contentColor = Color(0xFFFFE0B2)
+                        ),
+                        shape = RoundedCornerShape(12.dp),
+                        border = androidx.compose.foundation.BorderStroke(1.dp, Color(0x60D4AF37)),
+                        modifier = Modifier
+                            .height(36.dp)
+                            .testTag("change_mode_button")
                     ) {
-                        Icon(
-                            imageVector = Icons.Default.TouchApp,
-                            contentDescription = null,
-                            tint = Color(0xFFFFD54F),
-                            modifier = Modifier.size(14.dp)
-                        )
-                        Spacer(modifier = Modifier.width(6.dp))
                         Text(
-                            text = "DRAG THE JOYSTICK TO MOVE",
-                            color = Color(0xFFFFE0B2),
+                            text = "⚙️ MODES",
                             fontSize = 11.sp,
                             fontWeight = FontWeight.Bold,
                             letterSpacing = 0.5.sp
                         )
                     }
-                }
 
-                // Central / Right Action: STAGES Button
-                Button(
-                    onClick = {
-                        showStageSelector = true
-                        haptics.click()
-                    },
-                    colors = ButtonDefaults.buttonColors(
-                        containerColor = Color(0xFF3E2312),
-                        contentColor = Color(0xFFFFD54F)
-                    ),
-                    shape = RoundedCornerShape(12.dp),
-                    border = androidx.compose.foundation.BorderStroke(1.dp, Color(0x60D4AF37)),
-                    modifier = Modifier
-                        .height(36.dp)
-                        .testTag("stages_menu_trigger_button")
-                ) {
-                    Text(
-                        text = "🏆 STAGES",
-                        fontSize = 11.sp,
-                        fontWeight = FontWeight.Bold,
-                        letterSpacing = 0.5.sp
-                    )
+                    Button(
+                        onClick = {
+                            showStageSelector = true
+                            haptics.click()
+                        },
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = Color(0xFF3E2312),
+                            contentColor = Color(0xFFFFD54F)
+                        ),
+                        shape = RoundedCornerShape(12.dp),
+                        border = androidx.compose.foundation.BorderStroke(1.dp, Color(0x60D4AF37)),
+                        modifier = Modifier
+                            .height(36.dp)
+                            .testTag("stages_menu_trigger_button")
+                    ) {
+                        Text(
+                            text = "🏆 STAGES",
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.Bold,
+                            letterSpacing = 0.5.sp
+                        )
+                    }
                 }
             }
         }
@@ -800,6 +1016,9 @@ fun ArmadilloEscapeScreen() {
                 progressManager = progressManager,
                 onSelectStage = { stageId ->
                     currentStageId = stageId
+                    val config = StageConfig.getStage(stageId)
+                    gameEngine.loadStage(config, activeMatchConfig)
+                    showStageSelector = false
                 },
                 onDismiss = { showStageSelector = false }
             )
@@ -812,12 +1031,14 @@ fun ArmadilloEscapeScreen() {
                 onNextStage = {
                     val nextId = (clearData.stage.id + 1).coerceAtMost(16)
                     currentStageId = nextId
+                    val config = StageConfig.getStage(nextId)
+                    gameEngine.loadStage(config, activeMatchConfig)
                     stageClearDialogData = null
                 },
                 onRetryStage = {
                     val retryId = clearData.stage.id
                     val config = StageConfig.getStage(retryId)
-                    gameEngine.loadStage(config)
+                    gameEngine.loadStage(config, activeMatchConfig)
                     stageClearDialogData = null
                 },
                 onSelectOther = {
