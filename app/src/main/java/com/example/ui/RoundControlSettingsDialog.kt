@@ -113,10 +113,17 @@ fun RoundControlSettingsDialog(
                         ),
                         modifier = Modifier
                             .weight(1f)
-                            .height(46.dp)
+                            .height(52.dp)
                             .testTag("round_${roundId}_joystick_left")
                     ) {
-                        Text("◀ LEFT", fontWeight = FontWeight.Black)
+                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                            Text("◀ LEFT", fontWeight = FontWeight.Black, fontSize = 13.sp)
+                            Text(
+                                "bottom-left",
+                                fontSize = 9.sp,
+                                color = if (!rightSide) Color(0xFF3E2006) else Color(0xFFBCAAA4)
+                            )
+                        }
                     }
                     Button(
                         onClick = {
@@ -131,10 +138,17 @@ fun RoundControlSettingsDialog(
                         ),
                         modifier = Modifier
                             .weight(1f)
-                            .height(46.dp)
+                            .height(52.dp)
                             .testTag("round_${roundId}_joystick_right")
                     ) {
-                        Text("RIGHT ▶", fontWeight = FontWeight.Black)
+                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                            Text("RIGHT ▶", fontWeight = FontWeight.Black, fontSize = 13.sp)
+                            Text(
+                                "bottom-right",
+                                fontSize = 9.sp,
+                                color = if (rightSide) Color(0xFF3E2006) else Color(0xFFBCAAA4)
+                            )
+                        }
                     }
                 }
 

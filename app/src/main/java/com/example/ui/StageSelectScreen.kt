@@ -64,6 +64,7 @@ fun StageSelectScreen(
 ) {
     var selectedFilter by remember { mutableIntStateOf(0) }
     var controlSettingsRound by remember { mutableIntStateOf(0) }
+    var settingsVersion by remember { mutableIntStateOf(0) }
     val context = LocalContext.current
     val preferences = remember { context.getSharedPreferences(CONTROL_PREFS, 0) }
 
@@ -165,6 +166,8 @@ fun StageSelectScreen(
                         isCurrent = isCurrent,
                         isCompleted = isCompleted,
                         highScore = highScore,
+                        preferences = preferences,
+                        settingsVersion = settingsVersion,
                         onSettings = if (!stage.isDualArmadillo) {
                             { controlSettingsRound = stage.id }
                         } else null,
@@ -184,7 +187,10 @@ fun StageSelectScreen(
         RoundControlSettingsDialog(
             roundId = controlSettingsRound,
             soundManager = soundManager,
-            onDismiss = { controlSettingsRound = 0 }
+            onDismiss = {
+                controlSettingsRound = 0
+                settingsVersion++
+            }
         )
     }
 }
@@ -195,6 +201,8 @@ private fun RoundCard(
     isCurrent: Boolean,
     isCompleted: Boolean,
     highScore: Int,
+    preferences: android.content.SharedPreferences,
+    settingsVersion: Int,
     onSettings: (() -> Unit)?,
     onClick: () -> Unit
 ) {
@@ -208,6 +216,10 @@ private fun RoundCard(
         isCompleted -> Color(0xFF26190F)
         else -> Color(0xFF1E120A)
     }
+
+    val isJoystickRight = if (!stage.isDualArmadillo) {
+        preferences.getBoolean("single_joystick_right_round_${stage.id}", false)
+    } else false
 
     Surface(
         color = bgColor,
@@ -248,6 +260,21 @@ private fun RoundCard(
                             )
                         }
                     } else if (onSettings != null) {
+                        Surface(
+                            color = if (isJoystickRight) Color(0xFF3E2723) else Color(0xFF261408),
+                            shape = RoundedCornerShape(4.dp),
+                            border = BorderStroke(0.5.dp, if (isJoystickRight) Color(0xFFFFB74D) else Color(0x80D4AF37)),
+                            modifier = Modifier.padding(end = 2.dp)
+                        ) {
+                            Text(
+                                text = if (isJoystickRight) "RIGHT ▶" else "◀ LEFT",
+                                color = if (isJoystickRight) Color(0xFFFFCC80) else Color(0xFFFFE082),
+                                fontSize = 8.sp,
+                                fontWeight = FontWeight.Bold,
+                                modifier = Modifier.padding(horizontal = 4.dp, vertical = 2.dp)
+                            )
+                        }
+
                         IconButton(
                             onClick = onSettings,
                             modifier = Modifier.size(28.dp).testTag("round_${stage.id}_settings")

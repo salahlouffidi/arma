@@ -8,7 +8,6 @@ import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.layout
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -27,7 +26,6 @@ import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.input.pointer.pointerInput
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
@@ -38,11 +36,6 @@ import kotlin.math.atan2
 import kotlin.math.cos
 import kotlin.math.sin
 import kotlin.math.sqrt
-
-private const val CONTROL_PREFS = "armasnake_settings"
-private const val ACTIVE_SINGLE_ROUND = "active_single_joystick_stage_id"
-
-private fun joystickRightKey(roundId: Int) = "single_joystick_right_round_$roundId"
 
 @Composable
 fun VirtualJoystick(
@@ -55,7 +48,6 @@ fun VirtualJoystick(
     label: String? = null,
     onMove: (inputX: Float, inputY: Float) -> Unit
 ) {
-    val context = LocalContext.current
     val density = LocalDensity.current
     val sizePx = with(density) { size.toPx() }
     val centerPx = sizePx / 2f
@@ -65,13 +57,6 @@ fun VirtualJoystick(
 
     val effectivePrimary = primaryColor ?: if (isBlueTheme) Color(0xFF00E5FF) else Color(0xFFFFD54F)
     val effectiveAccent = accentColor ?: if (isBlueTheme) Color(0xFF0091EA) else Color(0xFFD4AF37)
-
-    // Only the single-player joystick is configurable. Dual rounds stay fixed.
-    val activeRoundId = context.getSharedPreferences(CONTROL_PREFS, 0)
-        .getInt(ACTIVE_SINGLE_ROUND, 1)
-    val singleJoystickRight = testTag == "virtual_joystick" &&
-        context.getSharedPreferences(CONTROL_PREFS, 0)
-            .getBoolean(joystickRightKey(activeRoundId), false)
 
     var knobOffsetX by remember { mutableFloatStateOf(0f) }
     var knobOffsetY by remember { mutableFloatStateOf(0f) }
@@ -83,19 +68,8 @@ fun VirtualJoystick(
         label = "joystick_alpha"
     )
 
-    val sideAwareModifier = if (singleJoystickRight) {
-        Modifier.layout { measurable, constraints ->
-            val placeable = measurable.measure(constraints.copy(minWidth = 0, minHeight = 0))
-            val rightMargin = 22.dp.roundToPx()
-            val width = constraints.maxWidth
-            val x = (width - placeable.width - rightMargin).coerceAtLeast(0)
-            layout(width, placeable.height) { placeable.placeRelative(x, 0) }
-        }
-    } else Modifier
-
     Box(
         modifier = modifier
-            .then(sideAwareModifier)
             .size(size)
             .testTag(testTag)
             .pointerInput(Unit) {

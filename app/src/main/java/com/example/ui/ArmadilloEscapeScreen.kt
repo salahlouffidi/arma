@@ -781,11 +781,20 @@ fun ArmadilloEscapeScreen() {
                     }
                 }
             } else {
-                // Single Joystick (Original Stages 1–8)
+                // Single Joystick (Rounds 1–8) with per-round independent LEFT/RIGHT position
+                val isSingleJoystickRight = remember(currentStageId, currentScreen, showStageSelector) {
+                    context.getSharedPreferences("armasnake_settings", 0)
+                        .getBoolean("single_joystick_right_round_$currentStageId", false)
+                }
+
                 VirtualJoystick(
                     modifier = Modifier
-                        .align(Alignment.BottomStart)
-                        .padding(start = 22.dp, bottom = 12.dp),
+                        .align(if (isSingleJoystickRight) Alignment.BottomEnd else Alignment.BottomStart)
+                        .padding(
+                            start = if (isSingleJoystickRight) 0.dp else 22.dp,
+                            end = if (isSingleJoystickRight) 22.dp else 0.dp,
+                            bottom = 12.dp
+                        ),
                     size = 126.dp,
                     label = "MOVE",
                     isBlueTheme = false,
@@ -805,58 +814,114 @@ fun ArmadilloEscapeScreen() {
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    // Space reservation for the left-aligned VirtualJoystick
-                    Spacer(modifier = Modifier.width(140.dp))
-
-                    // Steering Instruction Pill
-                    Surface(
-                        color = Color(0xD91E120A),
-                        shape = RoundedCornerShape(14.dp),
-                        border = androidx.compose.foundation.BorderStroke(1.dp, Color(0x50D4AF37))
-                    ) {
-                        Row(
-                            modifier = Modifier.padding(horizontal = 14.dp, vertical = 6.dp),
-                            verticalAlignment = Alignment.CenterVertically
+                    if (isSingleJoystickRight) {
+                        // When joystick is on the right, place STAGES button on the left
+                        Button(
+                            onClick = {
+                                showStageSelector = true
+                                haptics.click()
+                            },
+                            colors = ButtonDefaults.buttonColors(
+                                containerColor = Color(0xFF3E2312),
+                                contentColor = Color(0xFFFFD54F)
+                            ),
+                            shape = RoundedCornerShape(12.dp),
+                            border = androidx.compose.foundation.BorderStroke(1.dp, Color(0x60D4AF37)),
+                            modifier = Modifier
+                                .height(36.dp)
+                                .testTag("stages_menu_trigger_button")
                         ) {
-                            Icon(
-                                imageVector = Icons.Default.TouchApp,
-                                contentDescription = null,
-                                tint = Color(0xFFFFD54F),
-                                modifier = Modifier.size(14.dp)
-                            )
-                            Spacer(modifier = Modifier.width(6.dp))
                             Text(
-                                text = "DRAG THE JOYSTICK TO MOVE",
-                                color = Color(0xFFFFE0B2),
+                                text = "🏆 STAGES",
                                 fontSize = 11.sp,
                                 fontWeight = FontWeight.Bold,
                                 letterSpacing = 0.5.sp
                             )
                         }
-                    }
 
-                    // Central / Right Action: STAGES Button
-                    Button(
-                        onClick = {
-                            showStageSelector = true
-                            haptics.click()
-                        },
-                        colors = ButtonDefaults.buttonColors(
-                            containerColor = Color(0xFF3E2312),
-                            contentColor = Color(0xFFFFD54F)
-                        ),
-                        shape = RoundedCornerShape(12.dp),
-                        border = androidx.compose.foundation.BorderStroke(1.dp, Color(0x60D4AF37)),
-                        modifier = Modifier
-                            .height(36.dp)
-                            .testTag("stages_menu_trigger_button")
-                    ) {
-                        Text(
-                            text = "🏆 STAGES",
-                            fontSize = 11.sp,
-                            fontWeight = FontWeight.Bold,
-                            letterSpacing = 0.5.sp
-                        )
+                        // Steering Instruction Pill
+                        Surface(
+                            color = Color(0xD91E120A),
+                            shape = RoundedCornerShape(14.dp),
+                            border = androidx.compose.foundation.BorderStroke(1.dp, Color(0x50D4AF37))
+                        ) {
+                            Row(
+                                modifier = Modifier.padding(horizontal = 14.dp, vertical = 6.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.TouchApp,
+                                    contentDescription = null,
+                                    tint = Color(0xFFFFD54F),
+                                    modifier = Modifier.size(14.dp)
+                                )
+                                Spacer(modifier = Modifier.width(6.dp))
+                                Text(
+                                    text = "DRAG THE JOYSTICK TO MOVE",
+                                    color = Color(0xFFFFE0B2),
+                                    fontSize = 11.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    letterSpacing = 0.5.sp
+                                )
+                            }
+                        }
+
+                        // Space reservation for the right-aligned VirtualJoystick
+                        Spacer(modifier = Modifier.width(140.dp))
+                    } else {
+                        // Space reservation for the left-aligned VirtualJoystick
+                        Spacer(modifier = Modifier.width(140.dp))
+
+                        // Steering Instruction Pill
+                        Surface(
+                            color = Color(0xD91E120A),
+                            shape = RoundedCornerShape(14.dp),
+                            border = androidx.compose.foundation.BorderStroke(1.dp, Color(0x50D4AF37))
+                        ) {
+                            Row(
+                                modifier = Modifier.padding(horizontal = 14.dp, vertical = 6.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.TouchApp,
+                                    contentDescription = null,
+                                    tint = Color(0xFFFFD54F),
+                                    modifier = Modifier.size(14.dp)
+                                )
+                                Spacer(modifier = Modifier.width(6.dp))
+                                Text(
+                                    text = "DRAG THE JOYSTICK TO MOVE",
+                                    color = Color(0xFFFFE0B2),
+                                    fontSize = 11.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    letterSpacing = 0.5.sp
+                                )
+                            }
+                        }
+
+                        // Central / Right Action: STAGES Button
+                        Button(
+                            onClick = {
+                                showStageSelector = true
+                                haptics.click()
+                            },
+                            colors = ButtonDefaults.buttonColors(
+                                containerColor = Color(0xFF3E2312),
+                                contentColor = Color(0xFFFFD54F)
+                            ),
+                            shape = RoundedCornerShape(12.dp),
+                            border = androidx.compose.foundation.BorderStroke(1.dp, Color(0x60D4AF37)),
+                            modifier = Modifier
+                                .height(36.dp)
+                                .testTag("stages_menu_trigger_button")
+                        ) {
+                            Text(
+                                text = "🏆 STAGES",
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.Bold,
+                                letterSpacing = 0.5.sp
+                            )
+                        }
                     }
                 }
             }
