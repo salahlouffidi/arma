@@ -529,40 +529,11 @@ fun ArmadilloEscapeScreen() {
                     }
                 }
 
-                // Right Controls: Audio, Settings, Pause (Fixed compact dimensions)
+                // Right Controls: Settings, Pause (Fixed compact 40dp icon-only controls)
                 Row(
                     horizontalArrangement = Arrangement.spacedBy(6.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    // Quick Audio Toggle
-                    Surface(
-                        color = Color(0xE62A170C),
-                        shape = RoundedCornerShape(12.dp),
-                        border = androidx.compose.foundation.BorderStroke(1.dp, Color(0x60D4AF37)),
-                        modifier = Modifier
-                            .size(40.dp)
-                            .clickable {
-                                soundManager.isSoundEnabled = !soundManager.isSoundEnabled
-                                if (soundManager.isSoundEnabled) {
-                                    soundManager.startMusic()
-                                    soundManager.playMenuClick()
-                                }
-                            }
-                            .testTag("quick_audio_toggle")
-                    ) {
-                        Box(
-                            contentAlignment = Alignment.Center,
-                            modifier = Modifier.size(40.dp)
-                        ) {
-                            Icon(
-                                imageVector = if (soundManager.isSoundEnabled) Icons.Default.VolumeUp else Icons.Default.VolumeMute,
-                                contentDescription = "Toggle Audio",
-                                tint = if (soundManager.isSoundEnabled) Color(0xFFFFD54F) else Color(0xFFE57373),
-                                modifier = Modifier.size(18.dp)
-                            )
-                        }
-                    }
-
                     // Settings Button (Fixed 40dp compact icon-only control)
                     Surface(
                         color = Color(0xE62A170C),
@@ -603,7 +574,7 @@ fun ArmadilloEscapeScreen() {
 
             Spacer(modifier = Modifier.height(4.dp))
 
-            // Stat Bar: Goal, Score, Lost (compact fixed slots, centered)
+            // Stat Bar: Goal, Score, Lost, Audio (compact fixed slots, centered)
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.Center,
@@ -685,11 +656,40 @@ fun ArmadilloEscapeScreen() {
                             )
                         }
                     }
+
+                    // Quick Audio Toggle
+                    Surface(
+                        color = Color(0xE62A170C),
+                        shape = RoundedCornerShape(10.dp),
+                        border = androidx.compose.foundation.BorderStroke(1.dp, Color(0x60D4AF37)),
+                        modifier = Modifier
+                            .size(26.dp)
+                            .clickable {
+                                soundManager.isSoundEnabled = !soundManager.isSoundEnabled
+                                if (soundManager.isSoundEnabled) {
+                                    soundManager.startMusic()
+                                    soundManager.playMenuClick()
+                                }
+                            }
+                            .testTag("quick_audio_toggle")
+                    ) {
+                        Box(
+                            contentAlignment = Alignment.Center,
+                            modifier = Modifier.size(26.dp)
+                        ) {
+                            Icon(
+                                imageVector = if (soundManager.isSoundEnabled) Icons.Default.VolumeUp else Icons.Default.VolumeMute,
+                                contentDescription = "Toggle Audio",
+                                tint = if (soundManager.isSoundEnabled) Color(0xFFFFD54F) else Color(0xFFE57373),
+                                modifier = Modifier.size(14.dp)
+                            )
+                        }
+                    }
                 }
             }
         }
 
-        // ==================== OVERDRIVE INDEPENDENT OVERLAY PILL ====================
+        // ==================== OVERDRIVE INDEPENDENT TOP OVERLAY ====================
         val isAnyPowerActive = gameEngine.armadillo.isPowerActive || (gameEngine.armadillo2?.isPowerActive == true)
         val activePowerTimer = if (gameEngine.armadillo.isPowerActive) gameEngine.armadillo.powerTimer
             else (gameEngine.armadillo2?.powerTimer ?: 0f)
@@ -702,8 +702,8 @@ fun ArmadilloEscapeScreen() {
             powerChancesRemaining = activePowerChances,
             fruitsCollectedSinceEvent = gameEngine.fruitsCollectedSinceEvent,
             modifier = Modifier
-                .align(Alignment.TopCenter)
-                .padding(top = 80.dp)
+                .align(Alignment.TopEnd)
+                .padding(top = 8.dp, end = 102.dp)
         )
 
 
