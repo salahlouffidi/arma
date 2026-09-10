@@ -83,9 +83,6 @@ class GameEngine(
     var bannerTimer: Float = 0f
         private set
 
-    // Authoritative game simulation pause state
-    var isPaused: Boolean = false
-
     // Physics parameters
     private val baseTiltAccelFactor = 1600f
     private val baseMaxVelocity = 480f
@@ -404,7 +401,6 @@ class GameEngine(
         snake2InputX: Float = 0f,
         snake2InputY: Float = 0f
     ) {
-        if (isPaused) return
         val clampedDt = dt.coerceIn(0.001f, 0.05f)
         timeAliveSeconds += clampedDt
 
