@@ -30,6 +30,8 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.remember
@@ -56,6 +58,13 @@ fun StageSelectScreen(
 ) {
     var selectedFilter by remember { mutableIntStateOf(0) } // 0=All, 1=Solo (1-8), 2=Dual (9-16)
 
+    LaunchedEffect(Unit) {
+        soundManager.startMusic()
+    }
+    DisposableEffect(Unit) {
+        onDispose { soundManager.stopMusic() }
+    }
+
     val displayedStages = when (selectedFilter) {
         1 -> StageConfig.allStages.filter { !it.isDualArmadillo }
         2 -> StageConfig.allStages.filter { it.isDualArmadillo }
@@ -76,14 +85,13 @@ fun StageSelectScreen(
             )
             .statusBarsPadding()
             .navigationBarsPadding()
-            .testTag("stage_select_screen")
+            .testTag("round_select_screen")
     ) {
         Column(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(horizontal = 14.dp, vertical = 8.dp)
         ) {
-            // Top Bar
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
@@ -102,7 +110,7 @@ fun StageSelectScreen(
                     border = BorderStroke(1.dp, Color(0x60D4AF37)),
                     modifier = Modifier
                         .height(36.dp)
-                        .testTag("stage_select_back_button")
+                        .testTag("round_select_back_button")
                 ) {
                     Icon(
                         imageVector = Icons.AutoMirrored.Filled.ArrowBack,
@@ -113,22 +121,19 @@ fun StageSelectScreen(
                     Text(text = "MENU", fontSize = 11.sp, fontWeight = FontWeight.Bold)
                 }
 
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text(
-                        text = "🏆 16 WORLDS (ALL UNLOCKED)",
-                        color = Color(0xFFFFD700),
-                        fontSize = 15.sp,
-                        fontWeight = FontWeight.ExtraBold,
-                        letterSpacing = 0.5.sp
-                    )
-                }
+                Text(
+                    text = "🏆 16 ROUNDS • ALL UNLOCKED",
+                    color = Color(0xFFFFD700),
+                    fontSize = 15.sp,
+                    fontWeight = FontWeight.ExtraBold,
+                    letterSpacing = 0.5.sp
+                )
 
-                // Filter Pill Selector: All, Solo, Dual
                 Row(
                     horizontalArrangement = Arrangement.spacedBy(4.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    listOf("ALL (16)", "SOLO (1–8)", "DUAL (9–16)").forEachIndexed { index, label ->
+                    listOf("ALL (16)", "SOLO (01–08)", "DUAL (09–16)").forEachIndexed { index, label ->
                         val isSel = selectedFilter == index
                         Surface(
                             color = if (isSel) Color(0xFFD4AF37) else Color(0xFF261408),
@@ -153,7 +158,6 @@ fun StageSelectScreen(
 
             Spacer(modifier = Modifier.height(8.dp))
 
-            // Stages in an adaptive 4-column landscape grid
             LazyVerticalGrid(
                 columns = GridCells.Fixed(4),
                 contentPadding = PaddingValues(bottom = 6.dp),
@@ -166,13 +170,14 @@ fun StageSelectScreen(
                     val isCompleted = progressManager.isStageCompleted(stage.id)
                     val highScore = progressManager.getStageHighScore(stage.id)
 
-                    StageCard(
+                    RoundCard(
                         stage = stage,
                         isCurrent = isCurrent,
                         isCompleted = isCompleted,
                         highScore = highScore,
                         onClick = {
                             soundManager.playStageSelected()
+                            soundManager.stopMusic()
                             onSelectStage(stage.id)
                         }
                     )
@@ -183,7 +188,7 @@ fun StageSelectScreen(
 }
 
 @Composable
-private fun StageCard(
+private fun RoundCard(
     stage: StageConfig,
     isCurrent: Boolean,
     isCompleted: Boolean,
@@ -210,13 +215,12 @@ private fun StageCard(
         modifier = Modifier
             .fillMaxWidth()
             .clickable { onClick() }
-            .testTag("stage_card_${stage.id}")
+            .testTag("round_card_${stage.id}")
     ) {
         Column(
             modifier = Modifier.padding(10.dp),
             verticalArrangement = Arrangement.SpaceBetween
         ) {
-            // Header: Icon + Stage # + Completed mark
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
@@ -226,7 +230,7 @@ private fun StageCard(
                     Text(text = stage.icon, fontSize = 20.sp)
                     Spacer(modifier = Modifier.width(6.dp))
                     Text(
-                        text = "STAGE ${stage.id}",
+                        text = "ROUND ${stage.id.toString().padStart(2, '0')}",
                         color = if (isCurrent) Color(0xFFFFD54F) else Color(0xFFFFCCBC),
                         fontSize = 12.sp,
                         fontWeight = FontWeight.ExtraBold
@@ -241,9 +245,9 @@ private fun StageCard(
                             modifier = Modifier.padding(end = 4.dp)
                         ) {
                             Text(
-                                text = "DUAL",
+                                text = "DUAL • SOLO",
                                 color = Color(0xFFE3F2FD),
-                                fontSize = 9.sp,
+                                fontSize = 8.sp,
                                 fontWeight = FontWeight.Black,
                                 modifier = Modifier.padding(horizontal = 4.dp, vertical = 2.dp)
                             )
@@ -270,7 +274,6 @@ private fun StageCard(
 
             Spacer(modifier = Modifier.height(4.dp))
 
-            // Title & Subtitle
             Text(
                 text = stage.title,
                 color = Color.White,
@@ -286,7 +289,6 @@ private fun StageCard(
 
             Spacer(modifier = Modifier.height(6.dp))
 
-            // Mechanics badge
             Surface(
                 color = Color(0x60000000),
                 shape = RoundedCornerShape(6.dp),
@@ -305,7 +307,6 @@ private fun StageCard(
 
             Spacer(modifier = Modifier.height(6.dp))
 
-            // Footer: Target & High Score
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
