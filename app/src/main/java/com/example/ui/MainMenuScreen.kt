@@ -8,7 +8,6 @@ import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -27,13 +26,14 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Settings
-import androidx.compose.material.icons.filled.Star
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -60,6 +60,13 @@ fun MainMenuScreen(
     onOpenGameModeSelect: () -> Unit = onOpenStageSelect
 ) {
     var showHowToPlay by remember { mutableStateOf(false) }
+
+    LaunchedEffect(Unit) {
+        soundManager.startMusic()
+    }
+    DisposableEffect(Unit) {
+        onDispose { soundManager.stopMusic() }
+    }
 
     val infiniteTransition = rememberInfiniteTransition(label = "pulse")
     val bannerGlow by infiniteTransition.animateFloat(
@@ -94,7 +101,6 @@ fun MainMenuScreen(
             verticalArrangement = Arrangement.Center,
             modifier = Modifier.padding(horizontal = 24.dp, vertical = 12.dp)
         ) {
-            // Main Logo & Branding
             Row(
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.Center
@@ -123,14 +129,13 @@ fun MainMenuScreen(
 
             Spacer(modifier = Modifier.height(8.dp))
 
-            // Unlocked badge
             Surface(
                 color = Color(0xFF3E1F0C),
                 shape = RoundedCornerShape(12.dp),
                 border = BorderStroke(1.dp, Color(0xFFD4AF37))
             ) {
                 Text(
-                    text = "🏆 ALL 16 WORLDS FULLY UNLOCKED (SOLO & DUAL)",
+                    text = "🏆 ALL 16 ROUNDS FULLY UNLOCKED • SOLO",
                     color = Color(0xFFFFE082),
                     fontSize = 11.sp,
                     fontWeight = FontWeight.Bold,
@@ -141,12 +146,10 @@ fun MainMenuScreen(
 
             Spacer(modifier = Modifier.height(16.dp))
 
-            // Action Buttons
             Row(
                 horizontalArrangement = Arrangement.spacedBy(12.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                // Play Primary Button -> Opens Game Mode selection
                 Button(
                     onClick = {
                         soundManager.playMenuClick()
@@ -169,14 +172,13 @@ fun MainMenuScreen(
                     )
                     Spacer(modifier = Modifier.width(6.dp))
                     Text(
-                        text = "PLAY / GAME MODE",
+                        text = "PLAY SOLO",
                         fontSize = 13.sp,
                         fontWeight = FontWeight.Black,
                         letterSpacing = 0.5.sp
                     )
                 }
 
-                // Stage Selection Button (All Unlocked!)
                 Button(
                     onClick = {
                         soundManager.playMenuClick()
@@ -190,10 +192,10 @@ fun MainMenuScreen(
                     border = BorderStroke(1.5.dp, Color(0xFFD4AF37)),
                     modifier = Modifier
                         .height(46.dp)
-                        .testTag("menu_stage_select_button")
+                        .testTag("menu_round_select_button")
                 ) {
                     Text(
-                        text = "🏆 SELECT STAGE (1–16)",
+                        text = "🏆 SELECT ROUND (1–16)",
                         fontSize = 12.sp,
                         fontWeight = FontWeight.ExtraBold
                     )
@@ -202,7 +204,6 @@ fun MainMenuScreen(
 
             Spacer(modifier = Modifier.height(12.dp))
 
-            // Secondary Buttons: Audio & Rules
             Row(
                 horizontalArrangement = Arrangement.spacedBy(10.dp),
                 verticalAlignment = Alignment.CenterVertically
@@ -259,7 +260,7 @@ fun MainMenuScreen(
                     )
                     Spacer(modifier = Modifier.width(6.dp))
                     Text(
-                        text = "RULES & 7ARAKA",
+                        text = "RULES & OVERDRIVE",
                         fontSize = 11.sp,
                         fontWeight = FontWeight.Bold
                     )
@@ -268,7 +269,6 @@ fun MainMenuScreen(
 
             Spacer(modifier = Modifier.height(12.dp))
 
-            // Quick feature pill hints
             Row(
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
                 verticalAlignment = Alignment.CenterVertically
@@ -292,7 +292,7 @@ fun MainMenuScreen(
                     border = BorderStroke(0.5.dp, Color(0x30FFFFFF))
                 ) {
                     Text(
-                        text = "⚡ 7araka Power Shield",
+                        text = "⚡ OVERDRIVE Power Shield",
                         color = Color(0xFFFFD54F),
                         fontSize = 10.sp,
                         modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
@@ -314,7 +314,6 @@ fun MainMenuScreen(
             }
         }
 
-        // How to play dialog
         if (showHowToPlay) {
             HowToPlayDialog(onDismiss = { showHowToPlay = false })
         }
@@ -352,7 +351,7 @@ private fun HowToPlayDialog(onDismiss: () -> Unit) {
                     RuleRow(
                         icon = "🕹️",
                         title = "Virtual Joystick Control",
-                        desc = "Press and drag the on-screen joystick to roll the armadillo across the table. 360° and diagonal movement fully supported!"
+                        desc = "Press and drag the on-screen joystick to roll the Armadillo across the arena. 360° and diagonal movement fully supported!"
                     )
                     RuleRow(
                         icon = "🍎",
@@ -361,23 +360,23 @@ private fun HowToPlayDialog(onDismiss: () -> Unit) {
                     )
                     RuleRow(
                         icon = "⚡",
-                        title = "7araka Star Ability",
-                        desc = "Catching the Star Fruit activates '⚡ SPECIAL 7ARAKA ACTIVE' granting super speed, agility, and protection!"
+                        title = "OVERDRIVE Ability",
+                        desc = "Catching the Star Fruit activates OVERDRIVE, granting super speed, agility, and protection!"
                     )
                     RuleRow(
                         icon = "🛡️",
                         title = "Snake Shield Protection",
-                        desc = "If the snake strikes while 7araka power is active, the armadillo SURVIVES! The shield absorbs the blow, 1 point is lost ('POWER LOST −1'), and play continues."
+                        desc = "If the snake strikes while OVERDRIVE is active, the Armadillo survives. The shield absorbs the blow, 1 point is lost, and play continues."
                     )
                     RuleRow(
-                        icon = "👥",
-                        title = "Dual Armadillo Co-op (Stages 9–16)",
-                        desc = "Extra stages feature two independent armadillos! Use your left thumb for Golden P1 and right thumb for Blue P2 to coordinate and outwit the snake."
+                        icon = "🔵",
+                        title = "Dual Armadillo Rounds 09–16",
+                        desc = "Rounds 09–16 feature two independent Armadillos. Use your left thumb for Golden and right thumb for Blue to control both simultaneously in single-player mode."
                     )
                     RuleRow(
                         icon = "👑",
-                        title = "All 16 Worlds Available",
-                        desc = "Stage 1 to Stage 16 are completely unlocked from the start. Jump to any environment immediately!"
+                        title = "All 16 Rounds Available",
+                        desc = "Round 01 through Round 16 are completely unlocked from the start. Jump to any environment immediately!"
                     )
                 }
 
