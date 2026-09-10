@@ -1146,7 +1146,7 @@ class GameEngine(
                             powerChancesRemaining = 1,
                             invulnerableTimer = 0.5f
                         )
-                        showBanner(if (armadillo2 != null) "⚡ GOLDEN ARMADILLO 7ARAKA!" else "⚡ SPECIAL 7ARAKA ACTIVE")
+                        showBanner(if (armadillo2 != null) "⚡ GOLDEN ARMADILLO OVERDRIVE!" else "⚡ SPECIAL OVERDRIVE ACTIVE")
                         onPowerActivated?.invoke()
                         spawnPowerBurstParticles(armadillo.pos)
                     } else {
@@ -1203,7 +1203,7 @@ class GameEngine(
                             powerChancesRemaining = 1,
                             invulnerableTimer = 0.5f
                         )
-                        showBanner("⚡ BLUE ARMADILLO 7ARAKA!")
+                        showBanner("⚡ BLUE ARMADILLO OVERDRIVE!")
                         onPowerActivated?.invoke()
                         spawnPowerBurstParticles(a2.pos)
                     } else {

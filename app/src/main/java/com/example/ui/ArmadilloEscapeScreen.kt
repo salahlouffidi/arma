@@ -30,6 +30,8 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.clickable
@@ -126,6 +128,9 @@ fun ArmadilloEscapeScreen() {
     var currentStageId by remember { mutableIntStateOf(1) }
     var showStageSelector by remember { mutableStateOf(false) }
     var stageClearDialogData by remember { mutableStateOf<StageClearData?>(null) }
+    var isGamePaused by remember { mutableStateOf(false) }
+    var showInGameSettings by remember { mutableStateOf(false) }
+    var inGameSettingsVersion by remember { mutableIntStateOf(0) }
 
     // Virtual Joystick Finger Input Vectors (Continuous Normalized: -1f..1f)
     // P1 (Golden Armadillo)
@@ -206,6 +211,7 @@ fun ArmadilloEscapeScreen() {
         joystickInputY = 0f
         joystickInputX2 = 0f
         joystickInputY2 = 0f
+        isGamePaused = false
         val config = StageConfig.getStage(currentStageId)
         gameEngine.loadStage(config)
     }
@@ -227,6 +233,7 @@ fun ArmadilloEscapeScreen() {
 
     LaunchedEffect(currentScreen) {
         if (currentScreen != GameScreenState.GAMEPLAY) return@LaunchedEffect
+        isGamePaused = false
         var lastTime = withFrameNanos { it }
         while (isActive) {
             withFrameNanos { now ->
@@ -234,26 +241,28 @@ fun ArmadilloEscapeScreen() {
                 lastTime = now
                 frameTimeNanos = now
 
-                // Direct Virtual Joystick Finger Input driving armadillo and snake physics
-                gameEngine.update(
-                    dt = dt,
-                    tiltX = joystickInputX,
-                    tiltY = joystickInputY,
-                    tiltX2 = joystickInputX2,
-                    tiltY2 = joystickInputY2,
-                    snake1InputX = snake1InputX,
-                    snake1InputY = snake1InputY,
-                    snake2InputX = snake2InputX,
-                    snake2InputY = snake2InputY
-                )
-                tick++
+                if (!isGamePaused) {
+                    // Direct Virtual Joystick Finger Input driving armadillo and snake physics
+                    gameEngine.update(
+                        dt = dt,
+                        tiltX = joystickInputX,
+                        tiltY = joystickInputY,
+                        tiltX2 = joystickInputX2,
+                        tiltY2 = joystickInputY2,
+                        snake1InputX = snake1InputX,
+                        snake1InputY = snake1InputY,
+                        snake2InputX = snake2InputX,
+                        snake2InputY = snake2InputY
+                    )
+                    tick++
 
-                val curScore = gameEngine.stats.score
-                if (curScore != lastScore) {
-                    lastScore = curScore
-                    scope.launch {
-                        scoreScale.animateTo(1.3f, tween(100))
-                        scoreScale.animateTo(1.0f, tween(150))
+                    val curScore = gameEngine.stats.score
+                    if (curScore != lastScore) {
+                        lastScore = curScore
+                        scope.launch {
+                            scoreScale.animateTo(1.3f, tween(100))
+                            scoreScale.animateTo(1.0f, tween(150))
+                        }
                     }
                 }
             }
@@ -439,262 +448,264 @@ fun ArmadilloEscapeScreen() {
         }
 
         // ==================== HUD: TOP BAR ====================
-        Row(
+        Column(
             modifier = Modifier
+                .align(Alignment.TopCenter)
                 .fillMaxWidth()
-                .padding(horizontal = 14.dp, vertical = 8.dp),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
+                .padding(horizontal = 10.dp, vertical = 6.dp)
         ) {
             Row(
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                // Back to Stage Select
-                Surface(
-                    modifier = Modifier
-                        .clickable {
-                            soundManager.playMenuClick()
-                            currentScreen = GameScreenState.STAGE_SELECT
-                        }
-                        .testTag("back_to_stages_button"),
-                    color = Color(0xD92E1508),
-                    shape = RoundedCornerShape(12.dp),
-                    border = androidx.compose.foundation.BorderStroke(1.dp, Color(0x80D4AF37))
+                // Left: Navigation & Stage Info
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                    verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Row(
-                        modifier = Modifier.padding(horizontal = 9.dp, vertical = 6.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Icon(
-                            imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                            contentDescription = "Stages",
-                            tint = Color(0xFFFFD54F),
-                            modifier = Modifier.size(14.dp)
-                        )
-                        Spacer(modifier = Modifier.width(4.dp))
-                        Text(
-                            text = "STAGES",
-                            color = Color(0xFFFFE0B2),
-                            fontSize = 11.sp,
-                            fontWeight = FontWeight.Bold
-                        )
-                    }
-                }
-
-                // Stage Selection Trigger
-                Surface(
-                    modifier = Modifier
-                        .clickable { showStageSelector = true }
-                        .testTag("stage_badge_button"),
-                    color = Color(0xD922130A),
-                    shape = RoundedCornerShape(12.dp),
-                    border = androidx.compose.foundation.BorderStroke(1.dp, Color(0x80D4AF37))
-                ) {
-                    Row(
-                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Text(
-                            text = "STAGE ${gameEngine.currentStage.id}: ${gameEngine.currentStage.title.uppercase()}",
-                            color = Color(0xFFFFE0B2),
-                            fontSize = 12.sp,
-                            fontWeight = FontWeight.Bold,
-                            letterSpacing = 0.4.sp
-                        )
-                        Spacer(modifier = Modifier.width(4.dp))
-                        Text(
-                            text = "▾",
-                            color = Color(0xFFFFD54F),
-                            fontSize = 12.sp,
-                            fontWeight = FontWeight.Bold
-                        )
-                    }
-                }
-            }
-
-            // Status, Score, Goal & Lost counters
-            Row(
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                // Stage Fruit Goal Tracker
-                Surface(
-                    color = Color(0xD922130A),
-                    shape = RoundedCornerShape(12.dp),
-                    border = androidx.compose.foundation.BorderStroke(1.dp, Color(0x6081C784))
-                ) {
-                    Row(
-                        modifier = Modifier.padding(horizontal = 9.dp, vertical = 6.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Text(
-                            text = "GOAL: ",
-                            color = Color(0xFFC8E6C9),
-                            fontSize = 11.sp,
-                            fontWeight = FontWeight.Medium
-                        )
-                        Text(
-                            text = "${gameEngine.stageFruitsCollected}/${gameEngine.currentStage.targetFruits} 🍎",
-                            color = Color(0xFFFFD54F),
-                            fontSize = 12.sp,
-                            fontWeight = FontWeight.ExtraBold
-                        )
-                    }
-                }
-
-                // Special Move / Protection Chances Indicator (when active)
-                if (gameEngine.armadillo.isPowerActive) {
+                    // Back to Stage Select
                     Surface(
-                        color = Color(0xF0003B46),
+                        modifier = Modifier
+                            .clickable {
+                                soundManager.playMenuClick()
+                                currentScreen = GameScreenState.STAGE_SELECT
+                            }
+                            .testTag("back_to_stages_button"),
+                        color = Color(0xD92E1508),
                         shape = RoundedCornerShape(12.dp),
-                        border = androidx.compose.foundation.BorderStroke(1.5.dp, Color(0xFF00E5FF))
+                        border = androidx.compose.foundation.BorderStroke(1.dp, Color(0x80D4AF37))
                     ) {
                         Row(
-                            modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
+                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 6.dp),
                             verticalAlignment = Alignment.CenterVertically
                         ) {
-                            Text(
-                                text = "⚡ 7ARAKA ",
-                                color = Color(0xFFFFEA00),
-                                fontSize = 12.sp,
-                                fontWeight = FontWeight.Black
+                            Icon(
+                                imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+                                contentDescription = "Stages",
+                                tint = Color(0xFFFFD54F),
+                                modifier = Modifier.size(14.dp)
                             )
+                            Spacer(modifier = Modifier.width(3.dp))
                             Text(
-                                text = "${gameEngine.armadillo.powerTimer.toInt()}s",
-                                color = Color(0xFF00E5FF),
-                                fontSize = 13.sp,
+                                text = "STAGES",
+                                color = Color(0xFFFFE0B2),
+                                fontSize = 10.sp,
                                 fontWeight = FontWeight.Bold
                             )
-                            Spacer(modifier = Modifier.width(4.dp))
-                            repeat(gameEngine.armadillo.powerChancesRemaining) {
-                                Text(
-                                    text = "🛡️",
-                                    fontSize = 12.sp
-                                )
-                            }
                         }
                     }
-                } else {
-                    // Fruit event progress tracker
+
+                    // Stage Selection Trigger
                     Surface(
+                        modifier = Modifier
+                            .widthIn(max = 140.dp)
+                            .clickable { showStageSelector = true }
+                            .testTag("stage_badge_button"),
                         color = Color(0xD922130A),
                         shape = RoundedCornerShape(12.dp),
-                        border = androidx.compose.foundation.BorderStroke(1.dp, Color(0x50FFB300))
+                        border = androidx.compose.foundation.BorderStroke(1.dp, Color(0x80D4AF37))
                     ) {
                         Row(
                             modifier = Modifier.padding(horizontal = 8.dp, vertical = 6.dp),
                             verticalAlignment = Alignment.CenterVertically
                         ) {
                             Text(
-                                text = "EVENT: ${gameEngine.fruitsCollectedSinceEvent}/4 🍎",
+                                text = "R${gameEngine.currentStage.id}: ${gameEngine.currentStage.title.uppercase()}",
+                                color = Color(0xFFFFE0B2),
+                                fontSize = 10.sp,
+                                fontWeight = FontWeight.Bold,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
+                            )
+                            Spacer(modifier = Modifier.width(2.dp))
+                            Text(
+                                text = "▾",
                                 color = Color(0xFFFFD54F),
-                                fontSize = 11.sp,
-                                fontWeight = FontWeight.SemiBold
+                                fontSize = 10.sp,
+                                fontWeight = FontWeight.Bold
                             )
                         }
                     }
                 }
 
-                // Score Pill
-                Surface(
-                    modifier = Modifier.scale(scoreScale.value),
-                    color = Color(0xE62A170C),
-                    shape = RoundedCornerShape(12.dp),
-                    border = androidx.compose.foundation.BorderStroke(1.5.dp, Color(0xFFFF7043))
+                // Right Controls: Audio, Settings, Pause (Fixed compact dimensions)
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                    verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Row(
-                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Text(
-                            text = "SCORE: ",
-                            color = Color(0xFFFFCCBC),
-                            fontSize = 12.sp,
-                            fontWeight = FontWeight.SemiBold
-                        )
-                        Text(
-                            text = "${gameEngine.stats.score}",
-                            color = Color(0xFFFFD54F),
-                            fontSize = 16.sp,
-                            fontWeight = FontWeight.ExtraBold
-                        )
-                    }
-                }
-
-                // Armadillos Lost Pill
-                Surface(
-                    color = Color(0xE6231208),
-                    shape = RoundedCornerShape(12.dp),
-                    border = androidx.compose.foundation.BorderStroke(1.dp, Color(0x6081C784))
-                ) {
-                    Row(
-                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Text(
-                            text = "LOST: ",
-                            color = Color(0xFFC8E6C9),
-                            fontSize = 11.sp,
-                            fontWeight = FontWeight.Medium
-                        )
-                        Text(
-                            text = "${gameEngine.stats.armadillosLost}",
-                            color = Color(0xFFE57373),
-                            fontSize = 13.sp,
-                            fontWeight = FontWeight.Bold
-                        )
-                    }
-                }
-
-                // Quick Audio Toggle
-                Surface(
-                    color = Color(0xE62A170C),
-                    shape = RoundedCornerShape(12.dp),
-                    border = androidx.compose.foundation.BorderStroke(1.dp, Color(0x60D4AF37)),
-                    modifier = Modifier
-                        .clickable {
-                            soundManager.isSoundEnabled = !soundManager.isSoundEnabled
-                            if (soundManager.isSoundEnabled) {
-                                soundManager.startMusic()
-                                soundManager.playMenuClick()
+                    // Quick Audio Toggle
+                    Surface(
+                        color = Color(0xE62A170C),
+                        shape = RoundedCornerShape(12.dp),
+                        border = androidx.compose.foundation.BorderStroke(1.dp, Color(0x60D4AF37)),
+                        modifier = Modifier
+                            .size(40.dp)
+                            .clickable {
+                                soundManager.isSoundEnabled = !soundManager.isSoundEnabled
+                                if (soundManager.isSoundEnabled) {
+                                    soundManager.startMusic()
+                                    soundManager.playMenuClick()
+                                }
                             }
+                            .testTag("quick_audio_toggle")
+                    ) {
+                        Box(
+                            contentAlignment = Alignment.Center,
+                            modifier = Modifier.size(40.dp)
+                        ) {
+                            Icon(
+                                imageVector = if (soundManager.isSoundEnabled) Icons.Default.VolumeUp else Icons.Default.VolumeMute,
+                                contentDescription = "Toggle Audio",
+                                tint = if (soundManager.isSoundEnabled) Color(0xFFFFD54F) else Color(0xFFE57373),
+                                modifier = Modifier.size(18.dp)
+                            )
                         }
-                        .testTag("quick_audio_toggle")
-                ) {
-                    Box(modifier = Modifier.padding(6.dp)) {
-                        Icon(
-                            imageVector = if (soundManager.isSoundEnabled) Icons.Default.VolumeUp else Icons.Default.VolumeMute,
-                            contentDescription = "Toggle Audio",
-                            tint = if (soundManager.isSoundEnabled) Color(0xFFFFD54F) else Color(0xFFE57373),
-                            modifier = Modifier.size(18.dp)
-                        )
                     }
-                }
 
-                // Audio & Controls Settings
-                Surface(
-                    color = Color(0xE62A170C),
-                    shape = RoundedCornerShape(12.dp),
-                    border = androidx.compose.foundation.BorderStroke(1.dp, Color(0x60D4AF37)),
-                    modifier = Modifier
-                        .clickable {
-                            soundManager.playMenuClick()
-                            showAudioSettings = true
+                    // Settings Button (Fixed 40dp compact icon-only control)
+                    Surface(
+                        color = Color(0xE62A170C),
+                        shape = RoundedCornerShape(12.dp),
+                        border = androidx.compose.foundation.BorderStroke(1.dp, Color(0x60D4AF37)),
+                        modifier = Modifier
+                            .size(40.dp)
+                            .clickable {
+                                soundManager.playMenuClick()
+                                isGamePaused = true
+                                showInGameSettings = true
+                            }
+                            .testTag("hud_settings_button")
+                    ) {
+                        Box(
+                            contentAlignment = Alignment.Center,
+                            modifier = Modifier.size(40.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Settings,
+                                contentDescription = "Settings",
+                                tint = Color(0xFFFFD54F),
+                                modifier = Modifier.size(18.dp)
+                            )
                         }
-                        .testTag("hud_settings_button")
-                ) {
-                    Box(modifier = Modifier.padding(6.dp)) {
-                        Icon(
-                            imageVector = Icons.Default.Settings,
-                            contentDescription = "Audio Settings",
-                            tint = Color(0xFFFFD54F),
-                            modifier = Modifier.size(18.dp)
-                        )
+                    }
+
+                    // Pause Button (Fixed 40dp compact icon-only control)
+                    PauseButton(
+                        isPaused = isGamePaused,
+                        onClick = {
+                            soundManager.playMenuClick()
+                            isGamePaused = !isGamePaused
+                        }
+                    )
+                }
+            }
+
+            Spacer(modifier = Modifier.height(4.dp))
+
+            // Stat Bar: Goal, Score, Lost (compact fixed slots, centered)
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.Center,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Row(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
+                    // Stage Fruit Goal Tracker
+                    Surface(
+                        color = Color(0xD922130A),
+                        shape = RoundedCornerShape(10.dp),
+                        border = androidx.compose.foundation.BorderStroke(1.dp, Color(0x6081C784))
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(
+                                text = "GOAL: ",
+                                color = Color(0xFFC8E6C9),
+                                fontSize = 10.sp,
+                                fontWeight = FontWeight.Medium
+                            )
+                            Text(
+                                text = "${gameEngine.stageFruitsCollected}/${gameEngine.currentStage.targetFruits} 🍎",
+                                color = Color(0xFFFFD54F),
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.ExtraBold
+                            )
+                        }
+                    }
+
+                    // Score Pill
+                    Surface(
+                        modifier = Modifier.scale(scoreScale.value),
+                        color = Color(0xE62A170C),
+                        shape = RoundedCornerShape(10.dp),
+                        border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFFFF7043))
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(horizontal = 9.dp, vertical = 4.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(
+                                text = "SCORE: ",
+                                color = Color(0xFFFFCCBC),
+                                fontSize = 10.sp,
+                                fontWeight = FontWeight.SemiBold
+                            )
+                            Text(
+                                text = "${gameEngine.stats.score}",
+                                color = Color(0xFFFFD54F),
+                                fontSize = 13.sp,
+                                fontWeight = FontWeight.ExtraBold
+                            )
+                        }
+                    }
+
+                    // Armadillos Lost Pill
+                    Surface(
+                        color = Color(0xE6231208),
+                        shape = RoundedCornerShape(10.dp),
+                        border = androidx.compose.foundation.BorderStroke(1.dp, Color(0x6081C784))
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(
+                                text = "LOST: ",
+                                color = Color(0xFFC8E6C9),
+                                fontSize = 10.sp,
+                                fontWeight = FontWeight.Medium
+                            )
+                            Text(
+                                text = "${gameEngine.stats.armadillosLost}",
+                                color = Color(0xFFE57373),
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.Bold
+                            )
+                        }
                     }
                 }
             }
         }
+
+        // ==================== OVERDRIVE INDEPENDENT OVERLAY PILL ====================
+        val isAnyPowerActive = gameEngine.armadillo.isPowerActive || (gameEngine.armadillo2?.isPowerActive == true)
+        val activePowerTimer = if (gameEngine.armadillo.isPowerActive) gameEngine.armadillo.powerTimer
+            else (gameEngine.armadillo2?.powerTimer ?: 0f)
+        val activePowerChances = if (gameEngine.armadillo.isPowerActive) gameEngine.armadillo.powerChancesRemaining
+            else (gameEngine.armadillo2?.powerChancesRemaining ?: 0)
+
+        OverdriveStatusPill(
+            isPowerActive = isAnyPowerActive,
+            powerTimer = activePowerTimer,
+            powerChancesRemaining = activePowerChances,
+            fruitsCollectedSinceEvent = gameEngine.fruitsCollectedSinceEvent,
+            modifier = Modifier
+                .align(Alignment.TopCenter)
+                .padding(top = 80.dp)
+        )
+
 
         // ==================== VIRTUAL JOYSTICKS ====================
         if (activeMatchConfig.isSolo) {
@@ -782,7 +793,7 @@ fun ArmadilloEscapeScreen() {
                 }
             } else {
                 // Single Joystick (Rounds 1–8) with per-round independent LEFT/RIGHT position
-                val isSingleJoystickRight = remember(currentStageId, currentScreen, showStageSelector) {
+                val isSingleJoystickRight = remember(currentStageId, currentScreen, showStageSelector, inGameSettingsVersion) {
                     context.getSharedPreferences("armasnake_settings", 0)
                         .getBoolean("single_joystick_right_round_$currentStageId", false)
                 }
@@ -1118,6 +1129,43 @@ fun ArmadilloEscapeScreen() {
             AudioSettingsDialog(
                 soundManager = soundManager,
                 onDismiss = { showAudioSettings = false }
+            )
+        }
+
+        // ==================== IN-GAME SETTINGS DIALOG ====================
+        if (showInGameSettings) {
+            InGameSettingsDialog(
+                roundId = currentStageId,
+                isDualArmadillo = gameEngine.isDualArmadillo,
+                soundManager = soundManager,
+                onControlChanged = {
+                    inGameSettingsVersion++
+                },
+                onResume = {
+                    showInGameSettings = false
+                    isGamePaused = false
+                },
+                onDismiss = {
+                    showInGameSettings = false
+                }
+            )
+        }
+
+        // ==================== PAUSE OVERLAY ====================
+        if (isGamePaused && !showInGameSettings && stageClearDialogData == null && !showStageSelector) {
+            PauseOverlay(
+                stage = gameEngine.currentStage,
+                onResume = { isGamePaused = false },
+                onSettings = { showInGameSettings = true },
+                onRestart = {
+                    val cfg = StageConfig.getStage(currentStageId)
+                    gameEngine.loadStage(cfg)
+                    isGamePaused = false
+                },
+                onExitToStages = {
+                    isGamePaused = false
+                    currentScreen = GameScreenState.STAGE_SELECT
+                }
             )
         }
     }
