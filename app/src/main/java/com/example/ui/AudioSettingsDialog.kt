@@ -35,6 +35,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -42,14 +43,22 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import com.example.game.SoundManager
 
+private const val CONTROL_PREFS = "armasnake_settings"
+private const val SINGLE_JOYSTICK_RIGHT = "single_joystick_right"
+
 @Composable
 fun AudioSettingsDialog(
     soundManager: SoundManager,
     onDismiss: () -> Unit
 ) {
+    val context = LocalContext.current
+    val preferences = remember { context.getSharedPreferences(CONTROL_PREFS, 0) }
     var isSoundOn by remember { mutableStateOf(soundManager.isSoundEnabled) }
     var musicVol by remember { mutableFloatStateOf(soundManager.musicVolume) }
     var sfxVol by remember { mutableFloatStateOf(soundManager.sfxVolume) }
+    var singleJoystickRight by remember {
+        mutableStateOf(preferences.getBoolean(SINGLE_JOYSTICK_RIGHT, false))
+    }
 
     Dialog(onDismissRequest = onDismiss) {
         Surface(
@@ -66,25 +75,19 @@ fun AudioSettingsDialog(
                 modifier = Modifier.padding(20.dp),
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
-                // Header
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Text(
-                            text = "🎵 AUDIO SETTINGS",
-                            color = Color(0xFFFFD54F),
-                            fontSize = 16.sp,
-                            fontWeight = FontWeight.Bold,
-                            letterSpacing = 0.5.sp
-                        )
-                    }
-                    IconButton(
-                        onClick = onDismiss,
-                        modifier = Modifier.size(32.dp)
-                    ) {
+                    Text(
+                        text = "🎵 AUDIO & CONTROL SETTINGS",
+                        color = Color(0xFFFFD54F),
+                        fontSize = 16.sp,
+                        fontWeight = FontWeight.Bold,
+                        letterSpacing = 0.5.sp
+                    )
+                    IconButton(onClick = onDismiss, modifier = Modifier.size(32.dp)) {
                         Icon(
                             imageVector = Icons.Default.Close,
                             contentDescription = "Close",
@@ -93,9 +96,77 @@ fun AudioSettingsDialog(
                     }
                 }
 
-                Spacer(modifier = Modifier.height(14.dp))
+                Spacer(modifier = Modifier.height(12.dp))
 
-                // Master Sound ON / OFF
+                Surface(
+                    color = Color(0xFF28160B),
+                    shape = RoundedCornerShape(14.dp),
+                    border = BorderStroke(1.dp, Color(0x60D4AF37)),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Column(modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp)) {
+                        Text(
+                            text = "🕹️ SINGLE-ARMADILLO CONTROL",
+                            color = Color(0xFFFFD54F),
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.Black
+                        )
+                        Spacer(modifier = Modifier.height(3.dp))
+                        Text(
+                            text = "Rounds 01–08 • choose where the movement joystick appears",
+                            color = Color(0xFFBCAAA4),
+                            fontSize = 10.sp
+                        )
+                        Spacer(modifier = Modifier.height(8.dp))
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            Button(
+                                onClick = {
+                                    singleJoystickRight = false
+                                    preferences.edit().putBoolean(SINGLE_JOYSTICK_RIGHT, false).apply()
+                                    soundManager.playMenuClick()
+                                },
+                                colors = ButtonDefaults.buttonColors(
+                                    containerColor = if (!singleJoystickRight) Color(0xFFD4AF37) else Color(0xFF3E2516),
+                                    contentColor = if (!singleJoystickRight) Color(0xFF1B0E05) else Color(0xFFFFE0B2)
+                                ),
+                                shape = RoundedCornerShape(10.dp),
+                                modifier = Modifier.weight(1f).height(38.dp)
+                                    .testTag("single_joystick_left_button")
+                            ) {
+                                Text("◀ LEFT", fontSize = 11.sp, fontWeight = FontWeight.Black)
+                            }
+                            Button(
+                                onClick = {
+                                    singleJoystickRight = true
+                                    preferences.edit().putBoolean(SINGLE_JOYSTICK_RIGHT, true).apply()
+                                    soundManager.playMenuClick()
+                                },
+                                colors = ButtonDefaults.buttonColors(
+                                    containerColor = if (singleJoystickRight) Color(0xFFD4AF37) else Color(0xFF3E2516),
+                                    contentColor = if (singleJoystickRight) Color(0xFF1B0E05) else Color(0xFFFFE0B2)
+                                ),
+                                shape = RoundedCornerShape(10.dp),
+                                modifier = Modifier.weight(1f).height(38.dp)
+                                    .testTag("single_joystick_right_button")
+                            ) {
+                                Text("RIGHT ▶", fontSize = 11.sp, fontWeight = FontWeight.Black)
+                            }
+                        }
+                        Spacer(modifier = Modifier.height(5.dp))
+                        Text(
+                            text = "Current: ${if (singleJoystickRight) "RIGHT" else "LEFT"}   •   Rounds 09–16 always use LEFT = GOLDEN / RIGHT = BLUE",
+                            color = Color(0xFFFFCC80),
+                            fontSize = 9.sp,
+                            fontWeight = FontWeight.SemiBold
+                        )
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(12.dp))
+
                 Surface(
                     color = Color(0xFF28160B),
                     shape = RoundedCornerShape(14.dp),
@@ -103,9 +174,7 @@ fun AudioSettingsDialog(
                     modifier = Modifier.fillMaxWidth()
                 ) {
                     Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(horizontal = 14.dp, vertical = 8.dp),
+                        modifier = Modifier.fillMaxWidth().padding(horizontal = 14.dp, vertical = 8.dp),
                         horizontalArrangement = Arrangement.SpaceBetween,
                         verticalAlignment = Alignment.CenterVertically
                     ) {
@@ -118,20 +187,13 @@ fun AudioSettingsDialog(
                             )
                             Spacer(modifier = Modifier.width(10.dp))
                             Column {
+                                Text("MASTER AUDIO", color = Color.White, fontSize = 13.sp, fontWeight = FontWeight.Bold)
                                 Text(
-                                    text = "MASTER AUDIO",
-                                    color = Color.White,
-                                    fontSize = 13.sp,
-                                    fontWeight = FontWeight.Bold
-                                )
-                                Text(
-                                    text = if (isSoundOn) "Sound effects & music active" else "Muted completely",
-                                    color = Color(0xFFBCAAA4),
-                                    fontSize = 10.sp
+                                    if (isSoundOn) "Sound effects & music active" else "Muted completely",
+                                    color = Color(0xFFBCAAA4), fontSize = 10.sp
                                 )
                             }
                         }
-
                         Switch(
                             checked = isSoundOn,
                             onCheckedChange = {
@@ -155,141 +217,63 @@ fun AudioSettingsDialog(
 
                 Spacer(modifier = Modifier.height(14.dp))
 
-                // Music Volume Slider
                 Column(modifier = Modifier.fillMaxWidth()) {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween
-                    ) {
+                    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
                         Row(verticalAlignment = Alignment.CenterVertically) {
-                            Icon(
-                                imageVector = Icons.Default.MusicNote,
-                                contentDescription = null,
-                                tint = Color(0xFFFFB74D),
-                                modifier = Modifier.size(16.dp)
-                            )
+                            Icon(Icons.Default.MusicNote, null, tint = Color(0xFFFFB74D), modifier = Modifier.size(16.dp))
                             Spacer(modifier = Modifier.width(6.dp))
-                            Text(
-                                text = "MUSIC (ARMASNAKE.MP3)",
-                                color = Color(0xFFFFE0B2),
-                                fontSize = 11.sp,
-                                fontWeight = FontWeight.SemiBold
-                            )
+                            Text("MUSIC (ARMASNAKE.MP3)", color = Color(0xFFFFE0B2), fontSize = 11.sp, fontWeight = FontWeight.SemiBold)
                         }
-                        Text(
-                            text = "${(musicVol * 100).toInt()}%",
-                            color = Color(0xFFFFD54F),
-                            fontSize = 11.sp,
-                            fontWeight = FontWeight.Bold
-                        )
+                        Text("${(musicVol * 100).toInt()}%", color = Color(0xFFFFD54F), fontSize = 11.sp, fontWeight = FontWeight.Bold)
                     }
                     Slider(
                         value = musicVol,
-                        onValueChange = {
-                            musicVol = it
-                            soundManager.musicVolume = it
-                        },
+                        onValueChange = { musicVol = it; soundManager.musicVolume = it },
                         valueRange = 0f..1f,
                         enabled = isSoundOn,
                         colors = SliderDefaults.colors(
-                            thumbColor = Color(0xFFFFD54F),
-                            activeTrackColor = Color(0xFFFFB74D),
-                            inactiveTrackColor = Color(0xFF3E2312)
+                            thumbColor = Color(0xFFFFD54F), activeTrackColor = Color(0xFFFFB74D), inactiveTrackColor = Color(0xFF3E2312)
                         ),
                         modifier = Modifier.testTag("music_volume_slider")
                     )
                 }
 
-                // SFX Volume Slider
                 Column(modifier = Modifier.fillMaxWidth()) {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween
-                    ) {
+                    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
                         Row(verticalAlignment = Alignment.CenterVertically) {
-                            Icon(
-                                imageVector = Icons.Default.VolumeUp,
-                                contentDescription = null,
-                                tint = Color(0xFF81C784),
-                                modifier = Modifier.size(16.dp)
-                            )
+                            Icon(Icons.Default.VolumeUp, null, tint = Color(0xFF81C784), modifier = Modifier.size(16.dp))
                             Spacer(modifier = Modifier.width(6.dp))
-                            Text(
-                                text = "SOUND EFFECTS (SFX)",
-                                color = Color(0xFFFFE0B2),
-                                fontSize = 11.sp,
-                                fontWeight = FontWeight.SemiBold
-                            )
+                            Text("SOUND EFFECTS (SFX)", color = Color(0xFFFFE0B2), fontSize = 11.sp, fontWeight = FontWeight.SemiBold)
                         }
-                        Text(
-                            text = "${(sfxVol * 100).toInt()}%",
-                            color = Color(0xFF81C784),
-                            fontSize = 11.sp,
-                            fontWeight = FontWeight.Bold
-                        )
+                        Text("${(sfxVol * 100).toInt()}%", color = Color(0xFF81C784), fontSize = 11.sp, fontWeight = FontWeight.Bold)
                     }
                     Slider(
                         value = sfxVol,
-                        onValueChange = {
-                            sfxVol = it
-                            soundManager.sfxVolume = it
-                        },
-                        onValueChangeFinished = {
-                            soundManager.playPointGained()
-                        },
+                        onValueChange = { sfxVol = it; soundManager.sfxVolume = it },
+                        onValueChangeFinished = { soundManager.playPointGained() },
                         valueRange = 0f..1f,
                         enabled = isSoundOn,
                         colors = SliderDefaults.colors(
-                            thumbColor = Color(0xFF81C784),
-                            activeTrackColor = Color(0xFF4CAF50),
-                            inactiveTrackColor = Color(0xFF1E3320)
+                            thumbColor = Color(0xFF81C784), activeTrackColor = Color(0xFF4CAF50), inactiveTrackColor = Color(0xFF1E3320)
                         ),
                         modifier = Modifier.testTag("sfx_volume_slider")
                     )
                 }
 
                 Spacer(modifier = Modifier.height(12.dp))
-
-                // Action Buttons: Test SFX & Close
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(10.dp)
-                ) {
+                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                     Button(
-                        onClick = {
-                            soundManager.playSpecialFruitActivated()
-                        },
-                        colors = ButtonDefaults.buttonColors(
-                            containerColor = Color(0xFF3E2516),
-                            contentColor = Color(0xFFFFD54F)
-                        ),
+                        onClick = { soundManager.playSpecialFruitActivated() },
+                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF3E2516), contentColor = Color(0xFFFFD54F)),
                         shape = RoundedCornerShape(12.dp),
-                        modifier = Modifier
-                            .weight(1f)
-                            .height(40.dp)
-                            .testTag("test_sfx_button")
-                    ) {
-                        Text(text = "🔔 TEST SFX", fontSize = 11.sp, fontWeight = FontWeight.Bold)
-                    }
-
+                        modifier = Modifier.weight(1f).height(40.dp).testTag("test_sfx_button")
+                    ) { Text("🔔 TEST SFX", fontSize = 11.sp, fontWeight = FontWeight.Bold) }
                     Button(
                         onClick = onDismiss,
-                        colors = ButtonDefaults.buttonColors(
-                            containerColor = Color(0xFFD4AF37),
-                            contentColor = Color(0xFF1B0E05)
-                        ),
+                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFD4AF37), contentColor = Color(0xFF1B0E05)),
                         shape = RoundedCornerShape(12.dp),
-                        modifier = Modifier
-                            .weight(1f)
-                            .height(40.dp)
-                            .testTag("close_settings_button")
-                    ) {
-                        Text(
-                            text = "DONE",
-                            fontSize = 11.sp,
-                            fontWeight = FontWeight.Bold
-                        )
-                    }
+                        modifier = Modifier.weight(1f).height(40.dp).testTag("close_settings_button")
+                    ) { Text("DONE", fontSize = 11.sp, fontWeight = FontWeight.Bold) }
                 }
             }
         }
