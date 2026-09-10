@@ -8,7 +8,6 @@ import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.layout
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Surface
@@ -41,14 +40,10 @@ import kotlin.math.sin
 import kotlin.math.sqrt
 
 private const val CONTROL_PREFS = "armasnake_settings"
-private const val SINGLE_JOYSTICK_RIGHT = "single_joystick_right"
+private const val ACTIVE_SINGLE_ROUND = "active_single_joystick_stage_id"
 
-/**
- * Mobile-friendly Virtual Joystick for ARMASNAKE.
- *
- * Rounds 01-08 can use the persistent LEFT/RIGHT single-joystick preference.
- * Rounds 09-16 keep the fixed dual layout: LEFT = Golden, RIGHT = Blue.
- */
+private fun joystickRightKey(roundId: Int) = "single_joystick_right_round_$roundId"
+
 @Composable
 fun VirtualJoystick(
     modifier: Modifier = Modifier,
@@ -71,11 +66,12 @@ fun VirtualJoystick(
     val effectivePrimary = primaryColor ?: if (isBlueTheme) Color(0xFF00E5FF) else Color(0xFFFFD54F)
     val effectiveAccent = accentColor ?: if (isBlueTheme) Color(0xFF0091EA) else Color(0xFFD4AF37)
 
-    // Only the single-player joystick uses the configurable side.
-    // The dual Armadillo joysticks and all other controls remain untouched.
+    // Only the single-player joystick is configurable. Dual rounds stay fixed.
+    val activeRoundId = context.getSharedPreferences(CONTROL_PREFS, 0)
+        .getInt(ACTIVE_SINGLE_ROUND, 1)
     val singleJoystickRight = testTag == "virtual_joystick" &&
         context.getSharedPreferences(CONTROL_PREFS, 0)
-            .getBoolean(SINGLE_JOYSTICK_RIGHT, false)
+            .getBoolean(joystickRightKey(activeRoundId), false)
 
     var knobOffsetX by remember { mutableFloatStateOf(0f) }
     var knobOffsetY by remember { mutableFloatStateOf(0f) }
@@ -93,13 +89,9 @@ fun VirtualJoystick(
             val rightMargin = 22.dp.roundToPx()
             val width = constraints.maxWidth
             val x = (width - placeable.width - rightMargin).coerceAtLeast(0)
-            layout(width, placeable.height) {
-                placeable.placeRelative(x, 0)
-            }
+            layout(width, placeable.height) { placeable.placeRelative(x, 0) }
         }
-    } else {
-        Modifier
-    }
+    } else Modifier
 
     Box(
         modifier = modifier
@@ -117,9 +109,10 @@ fun VirtualJoystick(
                         val clampedDist = dist.coerceAtMost(maxDragRadiusPx)
                         knobOffsetX = cos(angle) * clampedDist
                         knobOffsetY = sin(angle) * clampedDist
-                        val normX = (knobOffsetX / maxDragRadiusPx).coerceIn(-1f, 1f)
-                        val normY = (knobOffsetY / maxDragRadiusPx).coerceIn(-1f, 1f)
-                        onMove(normX, normY)
+                        onMove(
+                            (knobOffsetX / maxDragRadiusPx).coerceIn(-1f, 1f),
+                            (knobOffsetY / maxDragRadiusPx).coerceIn(-1f, 1f)
+                        )
                     },
                     onDrag = { change, dragAmount ->
                         change.consume()
@@ -130,9 +123,10 @@ fun VirtualJoystick(
                         val clampedDist = dist.coerceAtMost(maxDragRadiusPx)
                         knobOffsetX = cos(angle) * clampedDist
                         knobOffsetY = sin(angle) * clampedDist
-                        val normX = (knobOffsetX / maxDragRadiusPx).coerceIn(-1f, 1f)
-                        val normY = (knobOffsetY / maxDragRadiusPx).coerceIn(-1f, 1f)
-                        onMove(normX, normY)
+                        onMove(
+                            (knobOffsetX / maxDragRadiusPx).coerceIn(-1f, 1f),
+                            (knobOffsetY / maxDragRadiusPx).coerceIn(-1f, 1f)
+                        )
                     },
                     onDragEnd = {
                         isDragging = false
@@ -152,12 +146,7 @@ fun VirtualJoystick(
     ) {
         Canvas(modifier = Modifier.size(size)) {
             val center = Offset(centerPx, centerPx)
-
-            drawCircle(
-                color = Color.Black.copy(alpha = 0.35f * currentAlpha),
-                radius = baseRadiusPx + 4f,
-                center = center
-            )
+            drawCircle(Color.Black.copy(alpha = 0.35f * currentAlpha), baseRadiusPx + 4f, center)
 
             val baseDiskColors = if (isBlueTheme) {
                 listOf(Color(0x350A2440), Color(0x60041220))
@@ -165,11 +154,7 @@ fun VirtualJoystick(
                 listOf(Color(0x353E2723), Color(0x601A0E05))
             }
             drawCircle(
-                brush = Brush.radialGradient(
-                    colors = baseDiskColors,
-                    center = center,
-                    radius = baseRadiusPx
-                ),
+                brush = Brush.radialGradient(baseDiskColors, center, baseRadiusPx),
                 radius = baseRadiusPx,
                 center = center,
                 alpha = currentAlpha
@@ -190,25 +175,25 @@ fun VirtualJoystick(
             val indicatorIdle = if (isBlueTheme) Color(0x8000B0FF) else Color(0x80D4AF37)
             val indicatorColor = if (isDragging) indicatorActive.copy(alpha = currentAlpha) else indicatorIdle.copy(alpha = currentAlpha)
 
-            drawPath(path = Path().apply {
+            drawPath(Path().apply {
                 moveTo(center.x, center.y - arrowDist - arrowSize)
                 lineTo(center.x - arrowSize, center.y - arrowDist + arrowSize)
                 lineTo(center.x + arrowSize, center.y - arrowDist + arrowSize)
                 close()
             }, color = indicatorColor)
-            drawPath(path = Path().apply {
+            drawPath(Path().apply {
                 moveTo(center.x, center.y + arrowDist + arrowSize)
                 lineTo(center.x - arrowSize, center.y + arrowDist - arrowSize)
                 lineTo(center.x + arrowSize, center.y + arrowDist - arrowSize)
                 close()
             }, color = indicatorColor)
-            drawPath(path = Path().apply {
+            drawPath(Path().apply {
                 moveTo(center.x - arrowDist - arrowSize, center.y)
                 lineTo(center.x - arrowDist + arrowSize, center.y - arrowSize)
                 lineTo(center.x - arrowDist + arrowSize, center.y + arrowSize)
                 close()
             }, color = indicatorColor)
-            drawPath(path = Path().apply {
+            drawPath(Path().apply {
                 moveTo(center.x + arrowDist + arrowSize, center.y)
                 lineTo(center.x + arrowDist - arrowSize, center.y - arrowSize)
                 lineTo(center.x + arrowDist - arrowSize, center.y + arrowSize)
@@ -216,38 +201,16 @@ fun VirtualJoystick(
             }, color = indicatorColor)
 
             val guideLen = baseRadiusPx * 0.45f
-            drawLine(
-                color = Color(0x25FFFFFF).copy(alpha = currentAlpha),
-                start = Offset(center.x - guideLen, center.y),
-                end = Offset(center.x + guideLen, center.y),
-                strokeWidth = 1f,
-                cap = StrokeCap.Round
-            )
-            drawLine(
-                color = Color(0x25FFFFFF).copy(alpha = currentAlpha),
-                start = Offset(center.x, center.y - guideLen),
-                end = Offset(center.x, center.y + guideLen),
-                strokeWidth = 1f,
-                cap = StrokeCap.Round
-            )
+            drawLine(Color(0x25FFFFFF).copy(alpha = currentAlpha), Offset(center.x - guideLen, center.y), Offset(center.x + guideLen, center.y), 1f, StrokeCap.Round)
+            drawLine(Color(0x25FFFFFF).copy(alpha = currentAlpha), Offset(center.x, center.y - guideLen), Offset(center.x, center.y + guideLen), 1f, StrokeCap.Round)
 
             val knobCenter = Offset(center.x + knobOffsetX, center.y + knobOffsetY)
             if (isDragging) {
                 val lineColor = if (isBlueTheme) Color(0x8000E5FF) else Color(0x80FFD54F)
-                drawLine(
-                    color = lineColor.copy(alpha = currentAlpha),
-                    start = center,
-                    end = knobCenter,
-                    strokeWidth = 2.5f,
-                    cap = StrokeCap.Round
-                )
+                drawLine(lineColor.copy(alpha = currentAlpha), center, knobCenter, 2.5f, StrokeCap.Round)
             }
 
-            drawCircle(
-                color = Color.Black.copy(alpha = 0.4f * currentAlpha),
-                radius = knobRadiusPx + 3f,
-                center = Offset(knobCenter.x + 2f, knobCenter.y + 3f)
-            )
+            drawCircle(Color.Black.copy(alpha = 0.4f * currentAlpha), knobRadiusPx + 3f, Offset(knobCenter.x + 2f, knobCenter.y + 3f))
 
             val knobColors = if (isBlueTheme) {
                 if (isDragging) listOf(Color(0xFF80D8FF), Color(0xFF00B0FF), Color(0xFF0D47A1))
@@ -258,16 +221,16 @@ fun VirtualJoystick(
             }
             drawCircle(
                 brush = Brush.radialGradient(
-                    colors = knobColors,
-                    center = Offset(knobCenter.x - knobRadiusPx * 0.25f, knobCenter.y - knobRadiusPx * 0.25f),
-                    radius = knobRadiusPx
+                    knobColors,
+                    Offset(knobCenter.x - knobRadiusPx * 0.25f, knobCenter.y - knobRadiusPx * 0.25f),
+                    knobRadiusPx
                 ),
                 radius = knobRadiusPx,
                 center = knobCenter,
                 alpha = currentAlpha
             )
 
-            val rimDrag = if (isBlueTheme) Color(0xFFE1F5FE) else Color(0xFFFFFFFF)
+            val rimDrag = if (isBlueTheme) Color(0xFFE1F5FE) else Color.White
             val rimIdle = if (isBlueTheme) Color(0xFF80D8FF) else Color(0xFFFFECB3)
             drawCircle(
                 color = if (isDragging) rimDrag.copy(alpha = currentAlpha * 0.9f) else rimIdle.copy(alpha = currentAlpha * 0.7f),
@@ -284,18 +247,12 @@ fun VirtualJoystick(
                 radius = knobRadiusPx * 0.32f,
                 center = knobCenter
             )
-            drawCircle(
-                color = dotHighlight.copy(alpha = currentAlpha),
-                radius = knobRadiusPx * 0.14f,
-                center = knobCenter
-            )
+            drawCircle(dotHighlight.copy(alpha = currentAlpha), knobRadiusPx * 0.14f, knobCenter)
         }
 
         if (label != null) {
             Surface(
-                modifier = Modifier
-                    .align(Alignment.BottomCenter)
-                    .padding(bottom = 2.dp),
+                modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = 2.dp),
                 shape = RoundedCornerShape(6.dp),
                 color = Color(0xDD140B06),
                 border = BorderStroke(1.dp, effectivePrimary.copy(alpha = 0.85f))
