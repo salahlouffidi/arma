@@ -35,7 +35,6 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -43,22 +42,14 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import com.example.game.SoundManager
 
-private const val CONTROL_PREFS = "armasnake_settings"
-private const val SINGLE_JOYSTICK_RIGHT = "single_joystick_right"
-
 @Composable
 fun AudioSettingsDialog(
     soundManager: SoundManager,
     onDismiss: () -> Unit
 ) {
-    val context = LocalContext.current
-    val preferences = remember { context.getSharedPreferences(CONTROL_PREFS, 0) }
     var isSoundOn by remember { mutableStateOf(soundManager.isSoundEnabled) }
     var musicVol by remember { mutableFloatStateOf(soundManager.musicVolume) }
     var sfxVol by remember { mutableFloatStateOf(soundManager.sfxVolume) }
-    var singleJoystickRight by remember {
-        mutableStateOf(preferences.getBoolean(SINGLE_JOYSTICK_RIGHT, false))
-    }
 
     Dialog(onDismissRequest = onDismiss) {
         Surface(
@@ -81,87 +72,14 @@ fun AudioSettingsDialog(
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Text(
-                        text = "🎵 AUDIO & CONTROL SETTINGS",
+                        text = "🎵 AUDIO SETTINGS",
                         color = Color(0xFFFFD54F),
                         fontSize = 16.sp,
                         fontWeight = FontWeight.Bold,
                         letterSpacing = 0.5.sp
                     )
                     IconButton(onClick = onDismiss, modifier = Modifier.size(32.dp)) {
-                        Icon(
-                            imageVector = Icons.Default.Close,
-                            contentDescription = "Close",
-                            tint = Color(0xFFBCAAA4)
-                        )
-                    }
-                }
-
-                Spacer(modifier = Modifier.height(12.dp))
-
-                Surface(
-                    color = Color(0xFF28160B),
-                    shape = RoundedCornerShape(14.dp),
-                    border = BorderStroke(1.dp, Color(0x60D4AF37)),
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    Column(modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp)) {
-                        Text(
-                            text = "🕹️ SINGLE-ARMADILLO CONTROL",
-                            color = Color(0xFFFFD54F),
-                            fontSize = 12.sp,
-                            fontWeight = FontWeight.Black
-                        )
-                        Spacer(modifier = Modifier.height(3.dp))
-                        Text(
-                            text = "Rounds 01–08 • choose where the movement joystick appears",
-                            color = Color(0xFFBCAAA4),
-                            fontSize = 10.sp
-                        )
-                        Spacer(modifier = Modifier.height(8.dp))
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.spacedBy(8.dp)
-                        ) {
-                            Button(
-                                onClick = {
-                                    singleJoystickRight = false
-                                    preferences.edit().putBoolean(SINGLE_JOYSTICK_RIGHT, false).apply()
-                                    soundManager.playMenuClick()
-                                },
-                                colors = ButtonDefaults.buttonColors(
-                                    containerColor = if (!singleJoystickRight) Color(0xFFD4AF37) else Color(0xFF3E2516),
-                                    contentColor = if (!singleJoystickRight) Color(0xFF1B0E05) else Color(0xFFFFE0B2)
-                                ),
-                                shape = RoundedCornerShape(10.dp),
-                                modifier = Modifier.weight(1f).height(38.dp)
-                                    .testTag("single_joystick_left_button")
-                            ) {
-                                Text("◀ LEFT", fontSize = 11.sp, fontWeight = FontWeight.Black)
-                            }
-                            Button(
-                                onClick = {
-                                    singleJoystickRight = true
-                                    preferences.edit().putBoolean(SINGLE_JOYSTICK_RIGHT, true).apply()
-                                    soundManager.playMenuClick()
-                                },
-                                colors = ButtonDefaults.buttonColors(
-                                    containerColor = if (singleJoystickRight) Color(0xFFD4AF37) else Color(0xFF3E2516),
-                                    contentColor = if (singleJoystickRight) Color(0xFF1B0E05) else Color(0xFFFFE0B2)
-                                ),
-                                shape = RoundedCornerShape(10.dp),
-                                modifier = Modifier.weight(1f).height(38.dp)
-                                    .testTag("single_joystick_right_button")
-                            ) {
-                                Text("RIGHT ▶", fontSize = 11.sp, fontWeight = FontWeight.Black)
-                            }
-                        }
-                        Spacer(modifier = Modifier.height(5.dp))
-                        Text(
-                            text = "Current: ${if (singleJoystickRight) "RIGHT" else "LEFT"}   •   Rounds 09–16 always use LEFT = GOLDEN / RIGHT = BLUE",
-                            color = Color(0xFFFFCC80),
-                            fontSize = 9.sp,
-                            fontWeight = FontWeight.SemiBold
-                        )
+                        Icon(Icons.Default.Close, contentDescription = "Close", tint = Color(0xFFBCAAA4))
                     }
                 }
 
