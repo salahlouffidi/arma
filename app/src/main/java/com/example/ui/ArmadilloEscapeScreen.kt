@@ -39,6 +39,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.TouchApp
 import androidx.compose.material.icons.filled.VolumeMute
@@ -121,6 +122,9 @@ fun ArmadilloEscapeScreen() {
     var currentScreen by remember { mutableStateOf(GameScreenState.INTRO) }
     var activeMatchConfig by remember { mutableStateOf(MatchConfig.solo()) }
     var showAudioSettings by remember { mutableStateOf(false) }
+    var isGamePaused by remember { mutableStateOf(false) }
+    var showInGameSettings by remember { mutableStateOf(false) }
+    var joystickSettingsVersion by remember { mutableIntStateOf(0) }
 
     var highestUnlockedStage by remember { mutableIntStateOf(progressManager.getHighestUnlockedStage()) }
     var currentStageId by remember { mutableIntStateOf(1) }
@@ -206,8 +210,20 @@ fun ArmadilloEscapeScreen() {
         joystickInputY = 0f
         joystickInputX2 = 0f
         joystickInputY2 = 0f
+        isGamePaused = false
+        showInGameSettings = false
         val config = StageConfig.getStage(currentStageId)
         gameEngine.loadStage(config)
+    }
+
+    LaunchedEffect(isGamePaused) {
+        gameEngine.isPaused = isGamePaused
+        if (isGamePaused) {
+            joystickInputX = 0f
+            joystickInputY = 0f
+            joystickInputX2 = 0f
+            joystickInputY2 = 0f
+        }
     }
 
     // Score pop animation
@@ -225,35 +241,37 @@ fun ArmadilloEscapeScreen() {
     var frameTimeNanos by remember { mutableLongStateOf(0L) }
     var tick by remember { mutableLongStateOf(0L) }
 
-    LaunchedEffect(currentScreen) {
+    LaunchedEffect(currentScreen, isGamePaused) {
         if (currentScreen != GameScreenState.GAMEPLAY) return@LaunchedEffect
         var lastTime = withFrameNanos { it }
         while (isActive) {
             withFrameNanos { now ->
                 val dt = ((now - lastTime) / 1_000_000_000f).coerceIn(0.001f, 0.04f)
                 lastTime = now
-                frameTimeNanos = now
+                if (!isGamePaused) {
+                    frameTimeNanos = now
 
-                // Direct Virtual Joystick Finger Input driving armadillo and snake physics
-                gameEngine.update(
-                    dt = dt,
-                    tiltX = joystickInputX,
-                    tiltY = joystickInputY,
-                    tiltX2 = joystickInputX2,
-                    tiltY2 = joystickInputY2,
-                    snake1InputX = snake1InputX,
-                    snake1InputY = snake1InputY,
-                    snake2InputX = snake2InputX,
-                    snake2InputY = snake2InputY
-                )
-                tick++
+                    // Direct Virtual Joystick Finger Input driving armadillo and snake physics
+                    gameEngine.update(
+                        dt = dt,
+                        tiltX = joystickInputX,
+                        tiltY = joystickInputY,
+                        tiltX2 = joystickInputX2,
+                        tiltY2 = joystickInputY2,
+                        snake1InputX = snake1InputX,
+                        snake1InputY = snake1InputY,
+                        snake2InputX = snake2InputX,
+                        snake2InputY = snake2InputY
+                    )
+                    tick++
 
-                val curScore = gameEngine.stats.score
-                if (curScore != lastScore) {
-                    lastScore = curScore
-                    scope.launch {
-                        scoreScale.animateTo(1.3f, tween(100))
-                        scoreScale.animateTo(1.0f, tween(150))
+                    val curScore = gameEngine.stats.score
+                    if (curScore != lastScore) {
+                        lastScore = curScore
+                        scope.launch {
+                            scoreScale.animateTo(1.3f, tween(100))
+                            scoreScale.animateTo(1.0f, tween(150))
+                        }
                     }
                 }
             }
@@ -672,7 +690,7 @@ fun ArmadilloEscapeScreen() {
                     }
                 }
 
-                // Audio & Controls Settings
+                // Audio & In-Round Settings Button
                 Surface(
                     color = Color(0xE62A170C),
                     shape = RoundedCornerShape(12.dp),
@@ -680,16 +698,50 @@ fun ArmadilloEscapeScreen() {
                     modifier = Modifier
                         .clickable {
                             soundManager.playMenuClick()
-                            showAudioSettings = true
+                            isGamePaused = true
+                            showInGameSettings = true
                         }
                         .testTag("hud_settings_button")
                 ) {
                     Box(modifier = Modifier.padding(6.dp)) {
                         Icon(
                             imageVector = Icons.Default.Settings,
-                            contentDescription = "Audio Settings",
+                            contentDescription = "Settings",
                             tint = Color(0xFFFFD54F),
                             modifier = Modifier.size(18.dp)
+                        )
+                    }
+                }
+
+                // Dedicated Gameplay HUD Pause Button
+                Surface(
+                    color = Color(0xE63E2312),
+                    shape = RoundedCornerShape(12.dp),
+                    border = androidx.compose.foundation.BorderStroke(1.5.dp, Color(0xFFFFD54F)),
+                    modifier = Modifier
+                        .clickable {
+                            soundManager.playMenuClick()
+                            isGamePaused = true
+                        }
+                        .testTag("hud_pause_button")
+                ) {
+                    Row(
+                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 6.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(4.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Pause,
+                            contentDescription = "Pause",
+                            tint = Color(0xFFFFD54F),
+                            modifier = Modifier.size(18.dp)
+                        )
+                        Text(
+                            text = "PAUSE",
+                            color = Color(0xFFFFD54F),
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.Black,
+                            letterSpacing = 0.5.sp
                         )
                     }
                 }
@@ -782,7 +834,7 @@ fun ArmadilloEscapeScreen() {
                 }
             } else {
                 // Single Joystick (Rounds 1–8) with per-round independent LEFT/RIGHT position
-                val isSingleJoystickRight = remember(currentStageId, currentScreen, showStageSelector) {
+                val isSingleJoystickRight = remember(currentStageId, currentScreen, showStageSelector, joystickSettingsVersion) {
                     context.getSharedPreferences("armasnake_settings", 0)
                         .getBoolean("single_joystick_right_round_$currentStageId", false)
                 }
@@ -1109,6 +1161,42 @@ fun ArmadilloEscapeScreen() {
                 onSelectOther = {
                     stageClearDialogData = null
                     currentScreen = GameScreenState.STAGE_SELECT
+                }
+            )
+        }
+
+        // ==================== IN-GAME PAUSE OVERLAY ====================
+        if (isGamePaused && !showInGameSettings) {
+            PauseOverlay(
+                roundId = currentStageId,
+                onResume = {
+                    soundManager.playMenuClick()
+                    isGamePaused = false
+                },
+                onOpenSettings = {
+                    soundManager.playMenuClick()
+                    showInGameSettings = true
+                },
+                onRoundSelect = {
+                    soundManager.playMenuClick()
+                    isGamePaused = false
+                    currentScreen = GameScreenState.STAGE_SELECT
+                }
+            )
+        }
+
+        // ==================== IN-GAME SETTINGS DIALOG ====================
+        if (showInGameSettings) {
+            InGameSettingsDialog(
+                roundId = currentStageId,
+                isDualArmadillo = gameEngine.isDualArmadillo,
+                soundManager = soundManager,
+                onJoystickChanged = {
+                    joystickSettingsVersion++
+                },
+                onDismiss = {
+                    showInGameSettings = false
+                    // Keep isGamePaused = true as required by user prompt!
                 }
             )
         }
