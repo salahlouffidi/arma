@@ -68,14 +68,13 @@ fun StageSelectScreen(
     val context = LocalContext.current
     val preferences = remember { context.getSharedPreferences(CONTROL_PREFS, 0) }
 
-    LaunchedEffect(Unit) { soundManager.startMusic() }
-    DisposableEffect(Unit) { onDispose { soundManager.stopMusic() } }
-
     val displayedStages = when (selectedFilter) {
         1 -> StageConfig.allStages.filter { !it.isDualArmadillo }
         2 -> StageConfig.allStages.filter { it.isDualArmadillo }
         else -> StageConfig.allStages
     }
+
+    val highestUnlocked = progressManager.getHighestUnlockedStage()
 
     Box(
         modifier = Modifier
@@ -115,8 +114,8 @@ fun StageSelectScreen(
                 }
 
                 Text(
-                    text = "🏆 16 ROUNDS • ALL UNLOCKED",
-                    color = Color(0xFFFFD700), fontSize = 15.sp,
+                    text = "🏆 16-ROUND CAMPAIGN • UNLOCKED: $highestUnlocked/16",
+                    color = Color(0xFFFFD700), fontSize = 14.sp,
                     fontWeight = FontWeight.ExtraBold, letterSpacing = 0.5.sp
                 )
 
@@ -158,24 +157,27 @@ fun StageSelectScreen(
             ) {
                 items(displayedStages) { stage ->
                     val isCurrent = stage.id == currentStageId
+                    val isUnlocked = progressManager.isStageUnlocked(stage.id)
                     val isCompleted = progressManager.isStageCompleted(stage.id)
                     val highScore = progressManager.getStageHighScore(stage.id)
 
                     RoundCard(
                         stage = stage,
+                        isUnlocked = isUnlocked,
                         isCurrent = isCurrent,
                         isCompleted = isCompleted,
                         highScore = highScore,
                         preferences = preferences,
                         settingsVersion = settingsVersion,
-                        onSettings = if (!stage.isDualArmadillo) {
+                        onSettings = if (!stage.isDualArmadillo && isUnlocked) {
                             { controlSettingsRound = stage.id }
                         } else null,
                         onClick = {
-                            soundManager.playStageSelected()
-                            soundManager.stopMusic()
-                            preferences.edit().putInt("active_single_joystick_stage_id", stage.id).apply()
-                            onSelectStage(stage.id)
+                            if (isUnlocked) {
+                                soundManager.playStageSelected()
+                                preferences.edit().putInt("active_single_joystick_stage_id", stage.id).apply()
+                                onSelectStage(stage.id)
+                            }
                         }
                     )
                 }
@@ -198,6 +200,7 @@ fun StageSelectScreen(
 @Composable
 private fun RoundCard(
     stage: StageConfig,
+    isUnlocked: Boolean,
     isCurrent: Boolean,
     isCompleted: Boolean,
     highScore: Int,
@@ -207,11 +210,13 @@ private fun RoundCard(
     onClick: () -> Unit
 ) {
     val borderColor = when {
+        !isUnlocked -> Color(0x20FFFFFF)
         isCurrent -> Color(0xFFFFD700)
         isCompleted -> Color(0xFF81C784)
         else -> Color(0x60D4AF37)
     }
     val bgColor = when {
+        !isUnlocked -> Color(0xFF140C07)
         isCurrent -> Color(0xFF45220C)
         isCompleted -> Color(0xFF26190F)
         else -> Color(0xFF1E120A)
@@ -224,9 +229,12 @@ private fun RoundCard(
     Surface(
         color = bgColor,
         shape = RoundedCornerShape(14.dp),
-        border = BorderStroke(if (isCurrent) 2.dp else 1.dp, borderColor),
-        shadowElevation = if (isCurrent) 6.dp else 2.dp,
-        modifier = Modifier.fillMaxWidth().clickable { onClick() }.testTag("round_card_${stage.id}")
+        border = BorderStroke(if (isCurrent && isUnlocked) 2.dp else 1.dp, borderColor),
+        shadowElevation = if (isCurrent && isUnlocked) 6.dp else 1.dp,
+        modifier = Modifier
+            .fillMaxWidth()
+            .then(if (isUnlocked) Modifier.clickable { onClick() } else Modifier)
+            .testTag("round_card_${stage.id}")
     ) {
         Column(
             modifier = Modifier.padding(10.dp),
@@ -238,17 +246,38 @@ private fun RoundCard(
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text(stage.icon, fontSize = 20.sp)
+                    Text(
+                        text = if (isUnlocked) stage.icon else "🔒",
+                        fontSize = 18.sp
+                    )
                     Spacer(modifier = Modifier.width(6.dp))
                     Text(
                         text = "ROUND ${stage.id.toString().padStart(2, '0')}",
-                        color = if (isCurrent) Color(0xFFFFD54F) else Color(0xFFFFCCBC),
+                        color = when {
+                            !isUnlocked -> Color(0xFF757575)
+                            isCurrent -> Color(0xFFFFD54F)
+                            else -> Color(0xFFFFCCBC)
+                        },
                         fontSize = 12.sp, fontWeight = FontWeight.ExtraBold
                     )
                 }
 
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    if (stage.isDualArmadillo) {
+                    if (!isUnlocked) {
+                        Surface(
+                            color = Color(0xFF2B1D16),
+                            shape = RoundedCornerShape(6.dp),
+                            border = BorderStroke(0.5.dp, Color(0x40FFFFFF))
+                        ) {
+                            Text(
+                                text = "LOCKED",
+                                color = Color(0xFF9E9E9E),
+                                fontSize = 8.sp,
+                                fontWeight = FontWeight.Bold,
+                                modifier = Modifier.padding(horizontal = 5.dp, vertical = 2.dp)
+                            )
+                        }
+                    } else if (stage.isDualArmadillo) {
                         Surface(
                             color = Color(0xFF1565C0), shape = RoundedCornerShape(6.dp),
                             modifier = Modifier.padding(end = 4.dp)
@@ -300,16 +329,30 @@ private fun RoundCard(
             }
 
             Spacer(modifier = Modifier.height(4.dp))
-            Text(stage.title, color = Color.White, fontSize = 14.sp, fontWeight = FontWeight.Bold)
-            Text(stage.subtitle, color = Color(0xFFFFAB91), fontSize = 10.sp, maxLines = 1)
+            Text(
+                stage.title,
+                color = if (isUnlocked) Color.White else Color(0xFF757575),
+                fontSize = 14.sp,
+                fontWeight = FontWeight.Bold
+            )
+            Text(
+                stage.subtitle,
+                color = if (isUnlocked) Color(0xFFFFAB91) else Color(0xFF616161),
+                fontSize = 10.sp,
+                maxLines = 1
+            )
             Spacer(modifier = Modifier.height(6.dp))
 
             Surface(
-                color = Color(0x60000000), shape = RoundedCornerShape(6.dp),
-                border = BorderStroke(0.5.dp, Color(0x30FFFFFF)), modifier = Modifier.fillMaxWidth()
+                color = if (isUnlocked) Color(0x60000000) else Color(0x30000000),
+                shape = RoundedCornerShape(6.dp),
+                border = BorderStroke(0.5.dp, if (isUnlocked) Color(0x30FFFFFF) else Color(0x15FFFFFF)),
+                modifier = Modifier.fillMaxWidth()
             ) {
                 Text(
-                    stage.mechanicsBadge, color = Color(0xFFFFE082), fontSize = 9.sp,
+                    stage.mechanicsBadge,
+                    color = if (isUnlocked) Color(0xFFFFE082) else Color(0xFF757575),
+                    fontSize = 9.sp,
                     fontWeight = FontWeight.Medium, maxLines = 1,
                     modifier = Modifier.padding(horizontal = 6.dp, vertical = 3.dp)
                 )
@@ -322,13 +365,31 @@ private fun RoundCard(
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Text(
-                    "Goal: ${stage.targetFruits} 🍎", color = Color(0xFFFFD54F),
+                    "Goal: ${stage.targetFruits} 🍎",
+                    color = if (isUnlocked) Color(0xFFFFD54F) else Color(0xFF757575),
                     fontSize = 10.sp, fontWeight = FontWeight.Bold
                 )
-                if (highScore > 0) {
-                    Text("Best: $highScore", color = Color(0xFF81C784), fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                if (!isUnlocked) {
+                    Text(
+                        "🔒 LOCKED",
+                        color = Color(0xFF9E9E9E),
+                        fontSize = 10.sp,
+                        fontWeight = FontWeight.Bold
+                    )
+                } else if (highScore > 0) {
+                    Text(
+                        "Best: $highScore",
+                        color = Color(0xFF81C784),
+                        fontSize = 10.sp,
+                        fontWeight = FontWeight.Bold
+                    )
                 } else {
-                    Text("UNLOCKED", color = Color(0xFF69F0AE), fontSize = 9.sp, fontWeight = FontWeight.SemiBold)
+                    Text(
+                        "UNLOCKED",
+                        color = Color(0xFF69F0AE),
+                        fontSize = 9.sp,
+                        fontWeight = FontWeight.SemiBold
+                    )
                 }
             }
         }

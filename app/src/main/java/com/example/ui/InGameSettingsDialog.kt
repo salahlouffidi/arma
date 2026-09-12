@@ -55,7 +55,8 @@ fun InGameSettingsDialog(
     soundManager: SoundManager,
     onControlChanged: () -> Unit,
     onResume: () -> Unit,
-    onDismiss: () -> Unit
+    onDismiss: () -> Unit,
+    onMinimize: (() -> Unit)? = null
 ) {
     val context = LocalContext.current
     val prefs = remember { context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE) }
@@ -299,6 +300,26 @@ fun InGameSettingsDialog(
                             inactiveTrackColor = Color(0xFF1E3320)
                         )
                     )
+                }
+
+                // Minimize / PiP Button
+                if (onMinimize != null) {
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Button(
+                        onClick = onMinimize,
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = Color(0xFF1A2B35),
+                            contentColor = Color(0xFF81D4FA)
+                        ),
+                        shape = RoundedCornerShape(12.dp),
+                        border = BorderStroke(1.dp, Color(0x604FC3F7)),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(40.dp)
+                            .testTag("in_game_settings_minimize_button")
+                    ) {
+                        Text("🗗 MINIMIZE (PiP)", fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                    }
                 }
 
                 Spacer(modifier = Modifier.height(10.dp))

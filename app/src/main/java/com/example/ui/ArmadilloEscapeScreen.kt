@@ -113,7 +113,11 @@ data class StageClearData(
 )
 
 @Composable
-fun ArmadilloEscapeScreen() {
+fun ArmadilloEscapeScreen(
+    isInPip: Boolean = false,
+    onEnterPip: (() -> Unit)? = null,
+    onSetGameplayActive: ((Boolean) -> Unit)? = null
+) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
 
@@ -145,6 +149,50 @@ fun ArmadilloEscapeScreen() {
     var snake1InputY by remember { mutableFloatStateOf(0f) }
     var snake2InputX by remember { mutableFloatStateOf(0f) }
     var snake2InputY by remember { mutableFloatStateOf(0f) }
+
+    val lifecycleOwner = androidx.lifecycle.compose.LocalLifecycleOwner.current
+    DisposableEffect(lifecycleOwner) {
+        val observer = androidx.lifecycle.LifecycleEventObserver { _, event ->
+            if (event == androidx.lifecycle.Lifecycle.Event.ON_PAUSE ||
+                event == androidx.lifecycle.Lifecycle.Event.ON_STOP
+            ) {
+                if (currentScreen == GameScreenState.GAMEPLAY) {
+                    isGamePaused = true
+                    // Reset input vectors so the armadillo freezes in place
+                    joystickInputX = 0f
+                    joystickInputY = 0f
+                    joystickInputX2 = 0f
+                    joystickInputY2 = 0f
+                    snake1InputX = 0f
+                    snake1InputY = 0f
+                    snake2InputX = 0f
+                    snake2InputY = 0f
+                }
+            }
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose {
+            lifecycleOwner.lifecycle.removeObserver(observer)
+        }
+    }
+
+    LaunchedEffect(currentScreen) {
+        onSetGameplayActive?.invoke(currentScreen == GameScreenState.GAMEPLAY)
+    }
+
+    LaunchedEffect(isInPip) {
+        if (isInPip && currentScreen == GameScreenState.GAMEPLAY) {
+            isGamePaused = true
+            joystickInputX = 0f
+            joystickInputY = 0f
+            joystickInputX2 = 0f
+            joystickInputY2 = 0f
+            snake1InputX = 0f
+            snake1InputY = 0f
+            snake2InputX = 0f
+            snake2InputY = 0f
+        }
+    }
 
     // Game Engine
     val gameEngine = remember {
@@ -450,61 +498,79 @@ fun ArmadilloEscapeScreen() {
             )
         }
 
-        // ==================== HUD: TOP BAR (SINGLE HORIZONTAL ROW) ====================
-        val isAnyPowerActive = gameEngine.armadillo.isPowerActive || (gameEngine.armadillo2?.isPowerActive == true)
-        val activePowerTimer = if (gameEngine.armadillo.isPowerActive) gameEngine.armadillo.powerTimer
-            else (gameEngine.armadillo2?.powerTimer ?: 0f)
-        val activePowerChances = if (gameEngine.armadillo.isPowerActive) gameEngine.armadillo.powerChancesRemaining
-            else (gameEngine.armadillo2?.powerChancesRemaining ?: 0)
-
-        Box(
-            modifier = Modifier
-                .align(Alignment.TopCenter)
-                .fillMaxWidth()
-                .padding(horizontal = 6.dp, vertical = 6.dp)
-        ) {
-            // Base HUD Row (Always visible, perfectly stationary)
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.SpaceBetween
+        if (isInPip) {
+            Surface(
+                color = Color(0xD91E120A),
+                shape = RoundedCornerShape(8.dp),
+                border = androidx.compose.foundation.BorderStroke(1.dp, Color(0x80D4AF37)),
+                modifier = Modifier
+                    .align(Alignment.TopCenter)
+                    .padding(top = 6.dp)
             ) {
-                // LEFT: Navigation & Round Selector
+                Text(
+                    text = "⏸️ R${gameEngine.currentStage.id}: ${gameEngine.currentStage.title.uppercase()} • ${gameEngine.stageFruitsCollected}/${gameEngine.currentStage.targetFruits} 🍎",
+                    color = Color(0xFFFFD54F),
+                    fontSize = 11.sp,
+                    fontWeight = FontWeight.Bold,
+                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp)
+                )
+            }
+        } else {
+            // ==================== HUD: TOP BAR (SINGLE HORIZONTAL ROW) ====================
+            val isAnyPowerActive = gameEngine.armadillo.isPowerActive || (gameEngine.armadillo2?.isPowerActive == true)
+            val activePowerTimer = if (gameEngine.armadillo.isPowerActive) gameEngine.armadillo.powerTimer
+                else (gameEngine.armadillo2?.powerTimer ?: 0f)
+            val activePowerChances = if (gameEngine.armadillo.isPowerActive) gameEngine.armadillo.powerChancesRemaining
+                else (gameEngine.armadillo2?.powerChancesRemaining ?: 0)
+
+            Box(
+                modifier = Modifier
+                    .align(Alignment.TopCenter)
+                    .fillMaxWidth()
+                    .padding(horizontal = 6.dp, vertical = 6.dp)
+            ) {
+                // Base HUD Row (Always visible, perfectly stationary)
                 Row(
-                    horizontalArrangement = Arrangement.spacedBy(4.dp),
-                    verticalAlignment = Alignment.CenterVertically
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween
                 ) {
-                    // Back to Stage Select
-                    Surface(
-                        modifier = Modifier
-                            .clickable {
-                                soundManager.playMenuClick()
-                                currentScreen = GameScreenState.STAGE_SELECT
-                            }
-                            .testTag("back_to_stages_button"),
-                        color = Color(0xD92E1508),
-                        shape = RoundedCornerShape(10.dp),
-                        border = androidx.compose.foundation.BorderStroke(1.dp, Color(0x80D4AF37))
+                    // LEFT: Navigation & Round Selector
+                    Row(
+                        horizontalArrangement = Arrangement.spacedBy(4.dp),
+                        verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Row(
-                            modifier = Modifier.padding(horizontal = 6.dp, vertical = 6.dp),
-                            verticalAlignment = Alignment.CenterVertically
+                        // Back to Round Select
+                        Surface(
+                            modifier = Modifier
+                                .clickable {
+                                    soundManager.playMenuClick()
+                                    currentScreen = GameScreenState.STAGE_SELECT
+                                }
+                                .testTag("back_to_stages_button"),
+                            color = Color(0xD92E1508),
+                            shape = RoundedCornerShape(10.dp),
+                            border = androidx.compose.foundation.BorderStroke(1.dp, Color(0x80D4AF37))
                         ) {
-                            Icon(
-                                imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                                contentDescription = "Stages",
-                                tint = Color(0xFFFFD54F),
-                                modifier = Modifier.size(13.dp)
-                            )
-                            Spacer(modifier = Modifier.width(2.dp))
-                            Text(
-                                text = "STAGES",
-                                color = Color(0xFFFFE0B2),
-                                fontSize = 9.5.sp,
-                                fontWeight = FontWeight.Bold
-                            )
+                            Row(
+                                modifier = Modifier.padding(horizontal = 6.dp, vertical = 6.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Icon(
+                                    imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+                                    contentDescription = "Rounds",
+                                    tint = Color(0xFFFFD54F),
+                                    modifier = Modifier.size(13.dp)
+                                )
+                                Spacer(modifier = Modifier.width(2.dp))
+                                Text(
+                                    text = "ROUNDS",
+                                    color = Color(0xFFFFE0B2),
+                                    fontSize = 9.5.sp,
+                                    fontWeight = FontWeight.Bold
+                                )
+                            }
                         }
-                    }
 
                     // Stage Selection Trigger
                     Surface(
@@ -756,7 +822,7 @@ fun ArmadilloEscapeScreen() {
                             .testTag("stages_menu_trigger_button")
                     ) {
                         Text(
-                            text = "🏆 STAGES",
+                            text = "🏆 ROUNDS",
                             fontSize = 11.sp,
                             fontWeight = FontWeight.Bold,
                             letterSpacing = 0.5.sp
@@ -1046,7 +1112,7 @@ fun ArmadilloEscapeScreen() {
                             .testTag("stages_menu_trigger_button")
                     ) {
                         Text(
-                            text = "🏆 STAGES",
+                            text = "🏆 ROUNDS",
                             fontSize = 11.sp,
                             fontWeight = FontWeight.Bold,
                             letterSpacing = 0.5.sp
@@ -1055,9 +1121,10 @@ fun ArmadilloEscapeScreen() {
                 }
             }
         }
+        }
 
         // ==================== STAGE SELECTION DIALOG ====================
-        if (showStageSelector) {
+        if (showStageSelector && !isInPip) {
             StageSelectionDialog(
                 currentStageId = currentStageId,
                 highestUnlockedStage = highestUnlockedStage,
@@ -1073,7 +1140,7 @@ fun ArmadilloEscapeScreen() {
         }
 
         // ==================== STAGE CLEAR CELEBRATION DIALOG ====================
-        stageClearDialogData?.let { clearData ->
+        stageClearDialogData?.takeIf { !isInPip }?.let { clearData ->
             StageClearDialog(
                 data = clearData,
                 onNextStage = {
@@ -1097,7 +1164,7 @@ fun ArmadilloEscapeScreen() {
         }
 
         // ==================== AUDIO SETTINGS DIALOG ====================
-        if (showAudioSettings) {
+        if (showAudioSettings && !isInPip) {
             AudioSettingsDialog(
                 soundManager = soundManager,
                 onDismiss = { showAudioSettings = false }
@@ -1105,7 +1172,7 @@ fun ArmadilloEscapeScreen() {
         }
 
         // ==================== IN-GAME SETTINGS DIALOG ====================
-        if (showInGameSettings) {
+        if (showInGameSettings && !isInPip) {
             InGameSettingsDialog(
                 roundId = currentStageId,
                 isDualArmadillo = gameEngine.isDualArmadillo,
@@ -1119,12 +1186,13 @@ fun ArmadilloEscapeScreen() {
                 },
                 onDismiss = {
                     showInGameSettings = false
-                }
+                },
+                onMinimize = onEnterPip
             )
         }
 
         // ==================== PAUSE OVERLAY ====================
-        if (isGamePaused && !showInGameSettings && stageClearDialogData == null && !showStageSelector) {
+        if (isGamePaused && !isInPip && !showInGameSettings && stageClearDialogData == null && !showStageSelector) {
             PauseOverlay(
                 stage = gameEngine.currentStage,
                 onResume = { isGamePaused = false },
@@ -1137,7 +1205,8 @@ fun ArmadilloEscapeScreen() {
                 onExitToStages = {
                     isGamePaused = false
                     currentScreen = GameScreenState.STAGE_SELECT
-                }
+                },
+                onMinimize = onEnterPip
             )
         }
     }
@@ -1172,7 +1241,7 @@ private fun StageSelectionDialog(
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Text(
-                        text = "🏆 16-STAGE JOURNEY",
+                        text = "🏆 16-ROUND JOURNEY",
                         color = Color(0xFFFFD700),
                         fontSize = 15.sp,
                         fontWeight = FontWeight.Bold,
@@ -1195,7 +1264,7 @@ private fun StageSelectionDialog(
                     verticalArrangement = Arrangement.spacedBy(7.dp)
                 ) {
                     items(StageConfig.allStages) { stage ->
-                        val isUnlocked = stage.id <= highestUnlockedStage
+                        val isUnlocked = progressManager.isStageUnlocked(stage.id)
                         val isCurrent = stage.id == currentStageId
                         val isCompleted = progressManager.isStageCompleted(stage.id)
                         val highScore = progressManager.getStageHighScore(stage.id)
@@ -1304,7 +1373,7 @@ private fun StageClearDialog(
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
                 Text(
-                    text = if (data.stage.id == 16) "👑 16-STAGE DUAL MASTER! 👑" else if (data.stage.id == 8) "🌟 ORIGINAL CAMPAIGN CLEARED! 🌟" else "🎉 STAGE ${data.stage.id} CLEARED!",
+                    text = if (data.stage.id == 16) "👑 16-ROUND DUAL MASTER! 👑" else if (data.stage.id == 8) "🌟 ORIGINAL CAMPAIGN CLEARED! 🌟" else "🎉 ROUND ${data.stage.id} CLEARED!",
                     color = Color(0xFFFFD700),
                     fontSize = 17.sp,
                     fontWeight = FontWeight.ExtraBold,
@@ -1349,7 +1418,7 @@ private fun StageClearDialog(
                 if (data.isNewRecord) {
                     Spacer(modifier = Modifier.height(8.dp))
                     Text(
-                        text = "⭐ NEW STAGE HIGH SCORE! ⭐",
+                        text = "⭐ NEW ROUND HIGH SCORE! ⭐",
                         color = Color(0xFFFFD700),
                         fontSize = 11.sp,
                         fontWeight = FontWeight.Bold
@@ -1374,7 +1443,7 @@ private fun StageClearDialog(
                             .testTag("next_stage_button")
                     ) {
                         Text(
-                            text = "NEXT: STAGE ${next.id} (${next.title}) →",
+                            text = "NEXT: ROUND ${next.id} (${next.title}) →",
                             fontSize = 13.sp,
                             fontWeight = FontWeight.ExtraBold
                         )
@@ -1433,7 +1502,7 @@ private fun StageClearDialog(
                             .height(36.dp)
                             .testTag("stages_dialog_menu_button")
                     ) {
-                        Text(text = "STAGES", fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                        Text(text = "ROUNDS", fontSize = 11.sp, fontWeight = FontWeight.Bold)
                     }
                 }
             }

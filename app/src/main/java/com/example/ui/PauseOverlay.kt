@@ -40,7 +40,8 @@ fun PauseOverlay(
     onResume: () -> Unit,
     onSettings: () -> Unit,
     onRestart: () -> Unit,
-    onExitToStages: () -> Unit
+    onExitToStages: () -> Unit,
+    onMinimize: (() -> Unit)? = null
 ) {
     Dialog(onDismissRequest = onResume) {
         Surface(
@@ -66,7 +67,7 @@ fun PauseOverlay(
                 )
                 Spacer(modifier = Modifier.height(4.dp))
                 Text(
-                    text = "STAGE ${stage.id}: ${stage.title.uppercase()}",
+                    text = "ROUND ${stage.id.toString().padStart(2, '0')}: ${stage.title.uppercase()}",
                     color = Color(0xFFFFE0B2),
                     fontSize = 11.sp,
                     fontWeight = FontWeight.Bold,
@@ -122,9 +123,29 @@ fun PauseOverlay(
                     Text("SETTINGS", fontSize = 12.sp, fontWeight = FontWeight.Bold)
                 }
 
+                // Minimize / PiP Button
+                if (onMinimize != null) {
+                    Spacer(modifier = Modifier.height(10.dp))
+                    Button(
+                        onClick = onMinimize,
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = Color(0xFF1A2B35),
+                            contentColor = Color(0xFF81D4FA)
+                        ),
+                        shape = RoundedCornerShape(12.dp),
+                        border = BorderStroke(1.dp, Color(0x604FC3F7)),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(40.dp)
+                            .testTag("pause_minimize_button")
+                    ) {
+                        Text("🗗 MINIMIZE (PiP)", fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                    }
+                }
+
                 Spacer(modifier = Modifier.height(10.dp))
 
-                // Restart & Stage Select Buttons
+                // Restart & Round Select Buttons
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.spacedBy(8.dp)
@@ -162,7 +183,7 @@ fun PauseOverlay(
                             .height(40.dp)
                             .testTag("pause_exit_stages_button")
                     ) {
-                        Text("🏆 STAGES", fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                        Text("🏆 ROUNDS", fontSize = 11.sp, fontWeight = FontWeight.Bold)
                     }
                 }
             }

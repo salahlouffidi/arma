@@ -61,13 +61,6 @@ fun MainMenuScreen(
 ) {
     var showHowToPlay by remember { mutableStateOf(false) }
 
-    LaunchedEffect(Unit) {
-        soundManager.startMusic()
-    }
-    DisposableEffect(Unit) {
-        onDispose { soundManager.stopMusic() }
-    }
-
     val infiniteTransition = rememberInfiniteTransition(label = "pulse")
     val bannerGlow by infiniteTransition.animateFloat(
         initialValue = 0.8f,
@@ -135,7 +128,7 @@ fun MainMenuScreen(
                 border = BorderStroke(1.dp, Color(0xFFD4AF37))
             ) {
                 Text(
-                    text = "🏆 ALL 16 ROUNDS FULLY UNLOCKED • SOLO",
+                    text = "🏆 16-ROUND CAMPAIGN • SOLO",
                     color = Color(0xFFFFE082),
                     fontSize = 11.sp,
                     fontWeight = FontWeight.Bold,

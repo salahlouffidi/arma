@@ -5,16 +5,14 @@ import android.content.SharedPreferences
 
 class StageProgressManager(context: Context) {
     private val prefs: SharedPreferences =
-        context.getSharedPreferences("armadillo_escape_progress", Context.MODE_PRIVATE)
+        context.getSharedPreferences("armadillo_escape_progress_v2", Context.MODE_PRIVATE)
 
     fun getHighestUnlockedStage(): Int {
-        // ALL 16 STAGES UNLOCKED FROM THE BEGINNING
-        return 16
+        return prefs.getInt(KEY_HIGHEST_UNLOCKED, 1).coerceIn(1, 16)
     }
 
     fun isStageUnlocked(stageId: Int): Boolean {
-        // All 16 stages are available immediately
-        return true
+        return stageId <= getHighestUnlockedStage()
     }
 
     fun unlockStage(stageId: Int) {

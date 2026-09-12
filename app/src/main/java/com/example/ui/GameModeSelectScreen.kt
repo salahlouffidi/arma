@@ -46,13 +46,6 @@ fun GameModeSelectScreen(
     onSelectMultiplayer: () -> Unit,
     onBackToMenu: () -> Unit
 ) {
-    LaunchedEffect(Unit) {
-        soundManager.startMusic()
-    }
-    DisposableEffect(Unit) {
-        onDispose { soundManager.stopMusic() }
-    }
-
     Box(
         modifier = Modifier
             .fillMaxSize()
