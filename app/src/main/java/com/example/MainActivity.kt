@@ -19,7 +19,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import com.example.ads.AdManager
 import com.example.ui.ArmadilloEscapeScreen
-import com.example.ui.ArmadilloEscapeTheme
+import com.example.ui.theme.ArmadilloEscapeTheme
 import com.google.android.gms.ads.MobileAds
 
 class MainActivity : ComponentActivity() {
