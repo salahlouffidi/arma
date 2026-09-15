@@ -17,18 +17,27 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import com.example.ads.AdManager
 import com.example.ui.ArmadilloEscapeScreen
-import com.example.ui.theme.ArmadilloEscapeTheme
+import com.example.ui.ArmadilloEscapeTheme
+import com.google.android.gms.ads.MobileAds
 
 class MainActivity : ComponentActivity() {
     private var isInPipMode by mutableStateOf(false)
     private var isGameplayActive by mutableStateOf(false)
+    private lateinit var adManager: AdManager
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         // Strictly lock the visual game screen to fixed landscape orientation
         requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE
         enableEdgeToEdge()
+
+        adManager = AdManager(applicationContext)
+        MobileAds.initialize(this) {
+            adManager.preload()
+        }
+
         setContent {
             ArmadilloEscapeTheme {
                 Surface(
@@ -103,4 +112,3 @@ class MainActivity : ComponentActivity() {
         requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE
     }
 }
-
