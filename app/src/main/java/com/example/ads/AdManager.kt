@@ -29,6 +29,9 @@ class AdManager(private val context: Context) {
         loadInterstitial()
     }
 
+    fun isRewardedLoaded(): Boolean = rewardedAd != null
+    fun isInterstitialLoaded(): Boolean = interstitialAd != null
+
     fun showRewarded(
         activity: Activity,
         onRewardEarned: (RewardItem) -> Unit,
@@ -87,37 +90,45 @@ class AdManager(private val context: Context) {
     }
 
     private fun loadRewarded() {
-        RewardedAd.load(
-            context,
-            if (USE_TEST_ADS) TEST_REWARDED_AD_UNIT_ID else PROD_REWARDED_AD_UNIT_ID,
-            AdRequest.Builder().build(),
-            object : RewardedAdLoadCallback() {
-                override fun onAdLoaded(ad: RewardedAd) {
-                    rewardedAd = ad
-                }
+        try {
+            RewardedAd.load(
+                context,
+                if (USE_TEST_ADS) TEST_REWARDED_AD_UNIT_ID else PROD_REWARDED_AD_UNIT_ID,
+                AdRequest.Builder().build(),
+                object : RewardedAdLoadCallback() {
+                    override fun onAdLoaded(ad: RewardedAd) {
+                        rewardedAd = ad
+                    }
 
-                override fun onAdFailedToLoad(adError: LoadAdError) {
-                    rewardedAd = null
+                    override fun onAdFailedToLoad(adError: LoadAdError) {
+                        rewardedAd = null
+                    }
                 }
-            }
-        )
+            )
+        } catch (t: Throwable) {
+            rewardedAd = null
+        }
     }
 
     private fun loadInterstitial() {
-        InterstitialAd.load(
-            context,
-            if (USE_TEST_ADS) TEST_INTERSTITIAL_AD_UNIT_ID else PROD_INTERSTITIAL_AD_UNIT_ID,
-            AdRequest.Builder().build(),
-            object : InterstitialAdLoadCallback() {
-                override fun onAdLoaded(ad: InterstitialAd) {
-                    interstitialAd = ad
-                }
+        try {
+            InterstitialAd.load(
+                context,
+                if (USE_TEST_ADS) TEST_INTERSTITIAL_AD_UNIT_ID else PROD_INTERSTITIAL_AD_UNIT_ID,
+                AdRequest.Builder().build(),
+                object : InterstitialAdLoadCallback() {
+                    override fun onAdLoaded(ad: InterstitialAd) {
+                        interstitialAd = ad
+                    }
 
-                override fun onAdFailedToLoad(adError: LoadAdError) {
-                    interstitialAd = null
+                    override fun onAdFailedToLoad(adError: LoadAdError) {
+                        interstitialAd = null
+                    }
                 }
-            }
-        )
+            )
+        } catch (t: Throwable) {
+            interstitialAd = null
+        }
     }
 
     companion object {

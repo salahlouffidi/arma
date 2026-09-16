@@ -47,7 +47,8 @@ class MainActivity : ComponentActivity() {
                     ArmadilloEscapeScreen(
                         isInPip = isInPipMode,
                         onEnterPip = { enterPip() },
-                        onSetGameplayActive = { updatePipParams(it) }
+                        onSetGameplayActive = { updatePipParams(it) },
+                        adManager = adManager
                     )
                 }
             }

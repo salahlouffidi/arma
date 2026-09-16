@@ -40,9 +40,9 @@ class GameOverSystemTest {
 
         // Repeat collisions until max losses is reached
         for (i in 1..stage.maxAllowedLosses) {
-            // Elapse eaten and invulnerability timers (eaten 1.0s + invulnerable 2.0s = 3.0s total)
-            for (step in 1..40) {
-                engine.update(0.1f, 0f, 0f)
+            // Elapse eaten and invulnerability timers (eaten 1.0s + invulnerable 2.0s = 3.0s total; 80 * 0.05s = 4.0s)
+            for (step in 1..80) {
+                engine.update(0.05f, 0f, 0f)
             }
             // Position snake directly at armadillo position
             engine.snakes[0] = engine.snakes[0].copy(headPos = engine.armadillo.pos)
