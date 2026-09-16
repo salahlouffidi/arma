@@ -1243,11 +1243,11 @@ fun ArmadilloEscapeScreen(
                                 gameEngine.resetRound()
                             },
                             onUnavailable = {
-                                adStatusMessage = "Rewarded test ad unavailable. Tap RETRY ROUND!"
+                                adStatusMessage = "Rewarded test ad unavailable. Tap RETRY!"
                             }
                         )
                     } else {
-                        adStatusMessage = "Rewarded ad unavailable. Tap RETRY ROUND!"
+                        adStatusMessage = "Rewarded ad unavailable. Tap RETRY!"
                     }
                 },
                 onExitToRounds = {
@@ -1829,7 +1829,7 @@ private fun GameOverDialog(
                         verticalArrangement = Arrangement.spacedBy(6.dp),
                         horizontalAlignment = Alignment.CenterHorizontally
                     ) {
-                        // 1. Primary RETRY ROUND button (Prominent, Gold, Always Visible)
+                        // 1. Primary RETRY button (Prominent, Gold, Always Visible)
                         Button(
                             onClick = onRetryRound,
                             colors = ButtonDefaults.buttonColors(
@@ -1843,7 +1843,7 @@ private fun GameOverDialog(
                                 .testTag("game_over_retry_button")
                         ) {
                             Text(
-                                text = "↺ RETRY ROUND",
+                                text = "↻ RETRY",
                                 fontSize = 13.sp,
                                 fontWeight = FontWeight.Black,
                                 letterSpacing = 0.5.sp

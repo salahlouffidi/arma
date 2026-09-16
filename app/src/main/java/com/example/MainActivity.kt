@@ -17,10 +17,13 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.lifecycle.lifecycleScope
 import com.example.ads.AdManager
 import com.example.ui.ArmadilloEscapeScreen
 import com.example.ui.theme.ArmadilloEscapeTheme
 import com.google.android.gms.ads.MobileAds
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
 
 class MainActivity : ComponentActivity() {
     private var isInPipMode by mutableStateOf(false)
@@ -34,8 +37,14 @@ class MainActivity : ComponentActivity() {
         enableEdgeToEdge()
 
         adManager = AdManager(applicationContext)
-        MobileAds.initialize(this) {
-            adManager.preload()
+        lifecycleScope.launch(Dispatchers.IO) {
+            try {
+                MobileAds.initialize(this@MainActivity) {
+                    adManager.preload()
+                }
+            } catch (t: Throwable) {
+                // Safely handle environments without Google Play Services or AdServices
+            }
         }
 
         setContent {
