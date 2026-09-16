@@ -193,7 +193,7 @@ fun InGameSettingsDialog(
                             )
                             Spacer(modifier = Modifier.height(2.dp))
                             Text(
-                                text = "LEFT = GOLDEN ARMADILLO (P1)  •  RIGHT = BLUE ARMADILLO (P2)",
+                                text = "LEFT = GOLDEN ARMADILLO  •  RIGHT = BLUE ARMADILLO",
                                 color = Color(0xFFBCAAA4),
                                 fontSize = 10.sp
                             )

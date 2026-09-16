@@ -365,7 +365,7 @@ private fun RoundCard(
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Text(
-                    "Goal: ${stage.targetFruits} 🍎",
+                    "${stage.targetFruits} 🍎 • Max: ${stage.maxAllowedLosses} 💔",
                     color = if (isUnlocked) Color(0xFFFFD54F) else Color(0xFF757575),
                     fontSize = 10.sp, fontWeight = FontWeight.Bold
                 )

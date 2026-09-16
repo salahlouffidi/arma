@@ -257,6 +257,25 @@ class SoundManager(private val context: Context) {
         playPcmSfx(samples)
     }
 
+    // 4b. 💀 game over defeat: dramatic descending minor cadence
+    fun playGameOver() {
+        val length = (sampleRate * 0.70).toInt()
+        val samples = ShortArray(length)
+        var phase = 0.0
+        val notes = doubleArrayOf(392.0, 369.99, 349.23, 311.13) // G4 -> F#4 -> F4 -> Eb4
+        val noteLen = length / notes.size
+        for (i in 0 until length) {
+            val noteIdx = (i / noteLen).coerceIn(0, notes.size - 1)
+            val freq = notes[noteIdx]
+            val subT = (i % noteLen).toDouble() / noteLen
+            phase += (2.0 * PI * freq) / sampleRate
+            val env = exp(-subT * 3.5)
+            val v = sin(phase) * env
+            samples[i] = (v * 28000).toInt().toShort()
+        }
+        playPcmSfx(samples)
+    }
+
     // 5. 💥 protection activation / shield deflect: energetic metallic clang / laser deflection
     fun playProtectionHit() {
         val length = (sampleRate * 0.28).toInt()

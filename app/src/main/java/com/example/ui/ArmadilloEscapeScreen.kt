@@ -133,6 +133,7 @@ fun ArmadilloEscapeScreen(
     var currentStageId by remember { mutableIntStateOf(1) }
     var showStageSelector by remember { mutableStateOf(false) }
     var stageClearDialogData by remember { mutableStateOf<StageClearData?>(null) }
+    var gameOverDialogData by remember { mutableStateOf<GameOverData?>(null) }
     var isGamePaused by remember { mutableStateOf(false) }
     var showInGameSettings by remember { mutableStateOf(false) }
     var inGameSettingsVersion by remember { mutableIntStateOf(0) }
@@ -250,6 +251,18 @@ fun ArmadilloEscapeScreen(
                     lost = lost,
                     timeSeconds = time,
                     isNewRecord = isNewRecord
+                )
+            }
+            onGameOver = { stage, score, fruits, lost, time ->
+                haptics.snakeCatch()
+                soundManager.playGameOver()
+                gameOverDialogData = GameOverData(
+                    stage = stage,
+                    score = score,
+                    fruits = fruits,
+                    lost = lost,
+                    maxAllowedLosses = stage.maxAllowedLosses,
+                    timeSeconds = time
                 )
             }
         }
@@ -508,7 +521,7 @@ fun ArmadilloEscapeScreen(
                     .padding(top = 6.dp)
             ) {
                 Text(
-                    text = "⏸️ R${gameEngine.currentStage.id}: ${gameEngine.currentStage.title.uppercase()} • ${gameEngine.stageFruitsCollected}/${gameEngine.currentStage.targetFruits} 🍎",
+                    text = "⏸️ R${gameEngine.currentStage.id}: ${gameEngine.currentStage.title.uppercase()} • ${gameEngine.stageFruitsCollected}/${gameEngine.currentStage.targetFruits} 🍎 • LOST: ${gameEngine.stats.armadillosLost}/${gameEngine.currentStage.maxAllowedLosses}",
                     color = Color(0xFFFFD54F),
                     fontSize = 11.sp,
                     fontWeight = FontWeight.Bold,
@@ -678,8 +691,8 @@ fun ArmadilloEscapeScreen(
                                 fontWeight = FontWeight.Medium
                             )
                             Text(
-                                text = "${gameEngine.stats.armadillosLost}",
-                                color = Color(0xFFE57373),
+                                text = "${gameEngine.stats.armadillosLost}/${gameEngine.currentStage.maxAllowedLosses}",
+                                color = if (gameEngine.stats.armadillosLost >= gameEngine.currentStage.maxAllowedLosses) Color(0xFFFF5252) else Color(0xFFE57373),
                                 fontSize = 10.sp,
                                 fontWeight = FontWeight.Bold
                             )
@@ -749,13 +762,13 @@ fun ArmadilloEscapeScreen(
         if (activeMatchConfig.isSolo) {
             val isDual = gameEngine.isDualArmadillo
             if (isDual) {
-                // Dual Armadillo Joysticks: Left = Golden P1, Right = Blue P2
+                // Dual Armadillo Joysticks: Left = Golden, Right = Blue
                 VirtualJoystick(
                     modifier = Modifier
                         .align(Alignment.BottomStart)
                         .padding(start = 18.dp, bottom = 12.dp),
                     size = 122.dp,
-                    label = "P1 GOLDEN",
+                    label = "GOLDEN",
                     isBlueTheme = false,
                     testTag = "virtual_joystick_p1",
                     onMove = { normX, normY ->
@@ -769,7 +782,7 @@ fun ArmadilloEscapeScreen(
                         .align(Alignment.BottomEnd)
                         .padding(end = 18.dp, bottom = 12.dp),
                     size = 122.dp,
-                    label = "P2 BLUE",
+                    label = "BLUE",
                     isBlueTheme = true,
                     testTag = "virtual_joystick_p2",
                     onMove = { normX, normY ->
@@ -797,7 +810,7 @@ fun ArmadilloEscapeScreen(
                             verticalAlignment = Alignment.CenterVertically
                         ) {
                             Text(
-                                text = "🕹️ LEFT: GOLDEN  |  RIGHT: BLUE 🕹️",
+                                text = "LEFT: GOLDEN  |  RIGHT: BLUE",
                                 color = Color(0xFFFFE0B2),
                                 fontSize = 11.sp,
                                 fontWeight = FontWeight.Bold,
@@ -864,7 +877,7 @@ fun ArmadilloEscapeScreen(
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     if (isSingleJoystickRight) {
-                        // When joystick is on the right, place STAGES button on the left
+                        // When joystick is on the right, place ROUNDS button on the left
                         Button(
                             onClick = {
                                 showStageSelector = true
@@ -881,7 +894,7 @@ fun ArmadilloEscapeScreen(
                                 .testTag("stages_menu_trigger_button")
                         ) {
                             Text(
-                                text = "🏆 STAGES",
+                                text = "🏆 ROUNDS",
                                 fontSize = 11.sp,
                                 fontWeight = FontWeight.Bold,
                                 letterSpacing = 0.5.sp
@@ -948,7 +961,7 @@ fun ArmadilloEscapeScreen(
                             }
                         }
 
-                        // Central / Right Action: STAGES Button
+                        // Central / Right Action: ROUNDS Button
                         Button(
                             onClick = {
                                 showStageSelector = true
@@ -965,7 +978,7 @@ fun ArmadilloEscapeScreen(
                                 .testTag("stages_menu_trigger_button")
                         ) {
                             Text(
-                                text = "🏆 STAGES",
+                                text = "🏆 ROUNDS",
                                 fontSize = 11.sp,
                                 fontWeight = FontWeight.Bold,
                                 letterSpacing = 0.5.sp
@@ -1153,11 +1166,35 @@ fun ArmadilloEscapeScreen(
                 onRetryStage = {
                     val retryId = clearData.stage.id
                     val config = StageConfig.getStage(retryId)
-                    gameEngine.loadStage(config, activeMatchConfig)
+                    gameEngine.resetRound()
                     stageClearDialogData = null
                 },
                 onSelectOther = {
                     stageClearDialogData = null
+                    currentScreen = GameScreenState.STAGE_SELECT
+                }
+            )
+        }
+
+        // ==================== GAME OVER DIALOG ====================
+        gameOverDialogData?.takeIf { !isInPip }?.let { goData ->
+            GameOverDialog(
+                data = goData,
+                onRetryRound = {
+                    joystickInputX = 0f
+                    joystickInputY = 0f
+                    joystickInputX2 = 0f
+                    joystickInputY2 = 0f
+                    snake1InputX = 0f
+                    snake1InputY = 0f
+                    snake2InputX = 0f
+                    snake2InputY = 0f
+                    isGamePaused = false
+                    gameEngine.resetRound()
+                    gameOverDialogData = null
+                },
+                onExitToRounds = {
+                    gameOverDialogData = null
                     currentScreen = GameScreenState.STAGE_SELECT
                 }
             )
@@ -1192,14 +1229,13 @@ fun ArmadilloEscapeScreen(
         }
 
         // ==================== PAUSE OVERLAY ====================
-        if (isGamePaused && !isInPip && !showInGameSettings && stageClearDialogData == null && !showStageSelector) {
+        if (isGamePaused && !isInPip && !showInGameSettings && stageClearDialogData == null && !showStageSelector && gameOverDialogData == null) {
             PauseOverlay(
                 stage = gameEngine.currentStage,
                 onResume = { isGamePaused = false },
                 onSettings = { showInGameSettings = true },
                 onRestart = {
-                    val cfg = StageConfig.getStage(currentStageId)
-                    gameEngine.loadStage(cfg)
+                    gameEngine.resetRound()
                     isGamePaused = false
                 },
                 onExitToStages = {
@@ -1328,7 +1364,7 @@ private fun StageSelectionDialog(
                                 if (isUnlocked) {
                                     Column(horizontalAlignment = Alignment.End) {
                                         Text(
-                                            text = "${stage.targetFruits} 🍎",
+                                            text = "${stage.targetFruits} 🍎 • ${stage.maxAllowedLosses} 💔",
                                             color = Color(0xFFFFD54F),
                                             fontSize = 11.sp,
                                             fontWeight = FontWeight.Bold
@@ -1397,26 +1433,52 @@ private fun StageClearDialog(
                     modifier = Modifier.fillMaxWidth()
                 ) {
                     Row(
-                        modifier = Modifier.padding(vertical = 10.dp, horizontal = 12.dp),
+                        modifier = Modifier.padding(vertical = 10.dp, horizontal = 10.dp),
                         horizontalArrangement = Arrangement.SpaceAround
                     ) {
                         Column(horizontalAlignment = Alignment.CenterHorizontally) {
                             Text(text = "SCORE", color = Color(0xFFBCAAA4), fontSize = 10.sp)
-                            Text(text = "${data.score}", color = Color(0xFFFFD54F), fontSize = 15.sp, fontWeight = FontWeight.Bold)
+                            Text(text = "${data.score}", color = Color(0xFFFFD54F), fontSize = 14.sp, fontWeight = FontWeight.Bold)
                         }
                         Column(horizontalAlignment = Alignment.CenterHorizontally) {
                             Text(text = "FRUITS", color = Color(0xFFBCAAA4), fontSize = 10.sp)
-                            Text(text = "${data.fruits}/${data.stage.targetFruits}", color = Color(0xFF81C784), fontSize = 15.sp, fontWeight = FontWeight.Bold)
+                            Text(text = "${data.fruits}/${data.stage.targetFruits}", color = Color(0xFF81C784), fontSize = 14.sp, fontWeight = FontWeight.Bold)
                         }
                         Column(horizontalAlignment = Alignment.CenterHorizontally) {
                             Text(text = "LOST", color = Color(0xFFBCAAA4), fontSize = 10.sp)
-                            Text(text = "${data.lost}", color = Color(0xFFE57373), fontSize = 15.sp, fontWeight = FontWeight.Bold)
+                            Text(text = "${data.lost}/${data.stage.maxAllowedLosses}", color = Color(0xFFE57373), fontSize = 14.sp, fontWeight = FontWeight.Bold)
+                        }
+                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                            Text(text = "TIME", color = Color(0xFFBCAAA4), fontSize = 10.sp)
+                            Text(text = formatGameTime(data.timeSeconds), color = Color(0xFFFFE0B2), fontSize = 14.sp, fontWeight = FontWeight.Bold)
                         }
                     }
                 }
 
+                Spacer(modifier = Modifier.height(8.dp))
+
+                val performanceRating = when {
+                    data.lost == 0 -> "★★★ PERFECT"
+                    data.lost == 1 -> "★★☆ EXCELLENT"
+                    data.lost < data.stage.maxAllowedLosses -> "★★☆ GREAT"
+                    else -> "★☆☆ SURVIVED"
+                }
+                Surface(
+                    color = Color(0xFF381F0E),
+                    shape = RoundedCornerShape(8.dp),
+                    border = androidx.compose.foundation.BorderStroke(1.dp, Color(0x60D4AF37))
+                ) {
+                    Text(
+                        text = performanceRating,
+                        color = Color(0xFFFFD54F),
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.Black,
+                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp)
+                    )
+                }
+
                 if (data.isNewRecord) {
-                    Spacer(modifier = Modifier.height(8.dp))
+                    Spacer(modifier = Modifier.height(6.dp))
                     Text(
                         text = "⭐ NEW ROUND HIGH SCORE! ⭐",
                         color = Color(0xFFFFD700),
@@ -1425,7 +1487,7 @@ private fun StageClearDialog(
                     )
                 }
 
-                Spacer(modifier = Modifier.height(14.dp))
+                Spacer(modifier = Modifier.height(12.dp))
 
                 // Action Buttons
                 if (data.stage.id < 16) {
@@ -1487,7 +1549,7 @@ private fun StageClearDialog(
                             .height(36.dp)
                             .testTag("retry_stage_button")
                     ) {
-                        Text(text = "↺ RETRY", fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                        Text(text = "↺ RETRY ROUND", fontSize = 11.sp, fontWeight = FontWeight.Bold)
                     }
 
                     Button(
@@ -1502,8 +1564,223 @@ private fun StageClearDialog(
                             .height(36.dp)
                             .testTag("stages_dialog_menu_button")
                     ) {
-                        Text(text = "ROUNDS", fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                        Text(text = "🏆 ROUNDS", fontSize = 11.sp, fontWeight = FontWeight.Bold)
                     }
+                }
+            }
+        }
+    }
+}
+
+private fun formatGameTime(totalSeconds: Float): String {
+    val sec = totalSeconds.toInt()
+    val minutes = sec / 60
+    val seconds = sec % 60
+    val mStr = if (minutes < 10) "0$minutes" else "$minutes"
+    val sStr = if (seconds < 10) "0$seconds" else "$seconds"
+    return "$mStr:$sStr"
+}
+
+data class GameOverData(
+    val stage: StageConfig,
+    val score: Int,
+    val fruits: Int,
+    val lost: Int,
+    val maxAllowedLosses: Int,
+    val timeSeconds: Float
+)
+
+@Composable
+private fun GameOverDialog(
+    data: GameOverData,
+    onRetryRound: () -> Unit,
+    onExitToRounds: () -> Unit
+) {
+    Dialog(onDismissRequest = {}) {
+        Surface(
+            shape = RoundedCornerShape(22.dp),
+            color = Color(0xFF1A0A04),
+            border = androidx.compose.foundation.BorderStroke(2.dp, Color(0xFFE53935)),
+            shadowElevation = 20.dp,
+            modifier = Modifier
+                .fillMaxWidth(0.92f)
+                .padding(vertical = 10.dp)
+                .testTag("game_over_dialog")
+        ) {
+            Column(
+                modifier = Modifier.padding(18.dp),
+                horizontalAlignment = Alignment.CenterHorizontally
+            ) {
+                // Header Banner
+                Surface(
+                    color = Color(0xFF3B1008),
+                    shape = RoundedCornerShape(10.dp),
+                    border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFFE53935)),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Text(
+                        text = "💀 GAME OVER 💀",
+                        color = Color(0xFFFF5252),
+                        fontSize = 18.sp,
+                        fontWeight = FontWeight.Black,
+                        letterSpacing = 1.sp,
+                        textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+                        modifier = Modifier.padding(vertical = 8.dp)
+                    )
+                }
+
+                Spacer(modifier = Modifier.height(10.dp))
+
+                // Round identification
+                Text(
+                    text = "ROUND ${data.stage.id.toString().padStart(2, '0')}",
+                    color = Color(0xFFFFD54F),
+                    fontSize = 14.sp,
+                    fontWeight = FontWeight.ExtraBold,
+                    letterSpacing = 0.5.sp
+                )
+                Text(
+                    text = data.stage.title.uppercase(),
+                    color = Color(0xFFFFCCBC),
+                    fontSize = 11.sp,
+                    fontWeight = FontWeight.SemiBold
+                )
+
+                Spacer(modifier = Modifier.height(12.dp))
+
+                // Performance Summary Grid
+                Surface(
+                    color = Color(0xFF241006),
+                    shape = RoundedCornerShape(12.dp),
+                    border = androidx.compose.foundation.BorderStroke(1.dp, Color(0x60D4AF37)),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Column(
+                        modifier = Modifier.padding(vertical = 10.dp, horizontal = 12.dp),
+                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(
+                                text = "ARMADILLOS LOST",
+                                color = Color(0xFFBCAAA4),
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.SemiBold
+                            )
+                            Text(
+                                text = "${data.lost} / ${data.maxAllowedLosses} 💔",
+                                color = Color(0xFFFF5252),
+                                fontSize = 13.sp,
+                                fontWeight = FontWeight.Black
+                            )
+                        }
+
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(
+                                text = "SCORE",
+                                color = Color(0xFFBCAAA4),
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.SemiBold
+                            )
+                            Text(
+                                text = "${data.score}",
+                                color = Color(0xFFFFD54F),
+                                fontSize = 13.sp,
+                                fontWeight = FontWeight.Bold
+                            )
+                        }
+
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(
+                                text = "FRUITS COLLECTED",
+                                color = Color(0xFFBCAAA4),
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.SemiBold
+                            )
+                            Text(
+                                text = "${data.fruits} / ${data.stage.targetFruits} 🍎",
+                                color = Color(0xFF81C784),
+                                fontSize = 13.sp,
+                                fontWeight = FontWeight.Bold
+                            )
+                        }
+
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(
+                                text = "TIME SURVIVED",
+                                color = Color(0xFFBCAAA4),
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.SemiBold
+                            )
+                            Text(
+                                text = formatGameTime(data.timeSeconds),
+                                color = Color(0xFFFFE0B2),
+                                fontSize = 13.sp,
+                                fontWeight = FontWeight.Bold
+                            )
+                        }
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(14.dp))
+
+                // Action Buttons
+                Button(
+                    onClick = onRetryRound,
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = Color(0xFFD4AF37),
+                        contentColor = Color(0xFF1B0E05)
+                    ),
+                    shape = RoundedCornerShape(12.dp),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(44.dp)
+                        .testTag("game_over_retry_button")
+                ) {
+                    Text(
+                        text = "↺ RETRY ROUND",
+                        fontSize = 13.sp,
+                        fontWeight = FontWeight.Black,
+                        letterSpacing = 0.5.sp
+                    )
+                }
+
+                Spacer(modifier = Modifier.height(8.dp))
+
+                Button(
+                    onClick = onExitToRounds,
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = Color(0xFF2C190F),
+                        contentColor = Color(0xFFFFD54F)
+                    ),
+                    shape = RoundedCornerShape(12.dp),
+                    border = androidx.compose.foundation.BorderStroke(1.dp, Color(0x60D4AF37)),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(40.dp)
+                        .testTag("game_over_exit_button")
+                ) {
+                    Text(
+                        text = "🏆 ROUNDS",
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.Bold,
+                        letterSpacing = 0.5.sp
+                    )
                 }
             }
         }

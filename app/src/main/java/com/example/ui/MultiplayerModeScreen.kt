@@ -169,7 +169,7 @@ fun MultiplayerModeScreen(
                     modifier = Modifier.testTag("mp_continue_stage_select_button")
                 ) {
                     Text(
-                        text = "CHOOSE STAGE (1–16)",
+                        text = "CHOOSE ROUND (1–16)",
                         fontSize = 11.sp,
                         fontWeight = FontWeight.Black
                     )

@@ -168,7 +168,7 @@ fun PauseOverlay(
                             modifier = Modifier.size(14.dp)
                         )
                         Spacer(modifier = Modifier.width(4.dp))
-                        Text("RESTART", fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                        Text("RETRY ROUND", fontSize = 11.sp, fontWeight = FontWeight.Bold)
                     }
 
                     Button(

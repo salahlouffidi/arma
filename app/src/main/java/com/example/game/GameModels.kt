@@ -143,6 +143,7 @@ data class StageConfig(
     val hasEscapingFruits: Boolean = false,
     val hasMovingTraps: Boolean = false,
     val isDualArmadillo: Boolean = false,
+    val maxAllowedLosses: Int = 3,
     val description: String,
     val mechanicsBadge: String
 ) {
@@ -157,7 +158,7 @@ data class StageConfig(
 
         val ALL_STAGES = listOf(
             // =========================================================================
-            // STAGES 1–8: ORIGINAL SOLO ARMADILLO STAGES (100% UNCHANGED)
+            // ROUNDS 1–8: SOLO ARMADILLO ROUNDS
             // =========================================================================
             StageConfig(
                 id = 1,
@@ -171,8 +172,9 @@ data class StageConfig(
                 friction = 0.94f,
                 hasEscapingFruits = false,
                 isDualArmadillo = false,
+                maxAllowedLosses = 5,
                 description = "Long introductory woodland quest with a patient snake, stone arches, and abundant sweet fruit groves.",
-                mechanicsBadge = "Grand Woodland • Slow Snake • Abundant Fruits • Long Level"
+                mechanicsBadge = "Grand Woodland • Slow Snake • 5 Losses Allowed • 20 Apples"
             ),
             StageConfig(
                 id = 2,
@@ -186,8 +188,9 @@ data class StageConfig(
                 friction = 0.94f,
                 hasEscapingFruits = false,
                 isDualArmadillo = false,
+                maxAllowedLosses = 5,
                 description = "Expansive desert wasteland. Navigate around sandstone boulders and avoid the relentless sidewinder.",
-                mechanicsBadge = "Sprawling Dunes • Faster Snake • Rock Hazards • Extended Play"
+                mechanicsBadge = "Sprawling Dunes • Faster Snake • 5 Losses Allowed • 28 Apples"
             ),
             StageConfig(
                 id = 3,
@@ -201,8 +204,9 @@ data class StageConfig(
                 friction = 0.94f,
                 hasEscapingFruits = true,
                 isDualArmadillo = false,
+                maxAllowedLosses = 4,
                 description = "Deep rainforest expanse with ancient moss boulders, dense vegetation, and agile escaping fruits.",
-                mechanicsBadge = "Deep Canopy • Escaping Fruits • Jungle Traps • 35 Apples"
+                mechanicsBadge = "Deep Canopy • Escaping Fruits • 4 Losses Allowed • 35 Apples"
             ),
             StageConfig(
                 id = 4,
@@ -217,8 +221,9 @@ data class StageConfig(
                 hasEscapingFruits = false,
                 hasMovingTraps = true,
                 isDualArmadillo = false,
+                maxAllowedLosses = 4,
                 description = "Vast high-altitude mountain pass with rolling boulders, narrow crags, and an aggressive alpine serpent.",
-                mechanicsBadge = "Rolling Boulders • Narrow Crags • High Speed • 42 Apples"
+                mechanicsBadge = "Rolling Boulders • Narrow Crags • 4 Losses Allowed • 42 Apples"
             ),
             StageConfig(
                 id = 5,
@@ -232,8 +237,9 @@ data class StageConfig(
                 friction = 0.94f,
                 hasEscapingFruits = false,
                 isDualArmadillo = false,
+                maxAllowedLosses = 3,
                 description = "Intense volcanic arena with multiple bubbling magma pits that penalize points on contact.",
-                mechanicsBadge = "Magma Pits • Scorching Threat • Less Safe Zone • 50 Apples"
+                mechanicsBadge = "Magma Pits • Scorching Threat • 3 Losses Allowed • 50 Apples"
             ),
             StageConfig(
                 id = 6,
@@ -247,8 +253,9 @@ data class StageConfig(
                 friction = 0.985f,
                 hasEscapingFruits = false,
                 isDualArmadillo = false,
+                maxAllowedLosses = 3,
                 description = "Massive frozen ice sheet with frictionless rolling momentum and a blindingly fast frost serpent.",
-                mechanicsBadge = "Frictionless Ice • High Momentum • Glacial Snake • 55 Apples"
+                mechanicsBadge = "Frictionless Ice • High Momentum • 3 Losses Allowed • 55 Apples"
             ),
             StageConfig(
                 id = 7,
@@ -263,8 +270,9 @@ data class StageConfig(
                 hasEscapingFruits = true,
                 hasMovingTraps = true,
                 isDualArmadillo = false,
+                maxAllowedLosses = 3,
                 description = "Colossal labyrinth of stone pillars, arcane traps, evasive fruits, and dual stalking serpents.",
-                mechanicsBadge = "Dual Stalking Serpents • Arcane Pillars • Evasive Fruits • 65 Apples"
+                mechanicsBadge = "Dual Stalking Serpents • Arcane Traps • 3 Losses Allowed • 65 Apples"
             ),
             StageConfig(
                 id = 8,
@@ -279,19 +287,19 @@ data class StageConfig(
                 hasEscapingFruits = true,
                 hasMovingTraps = true,
                 isDualArmadillo = false,
+                maxAllowedLosses = 3,
                 description = "The supreme marathon battleground: dual apex snakes, shifting barriers, lava pools, and elusive star fruits.",
-                mechanicsBadge = "Grand Colosseum • Dual Apex Snakes • All Hazard Traps • 75 Apples"
+                mechanicsBadge = "Grand Colosseum • Dual Apex Snakes • 3 Losses Allowed • 75 Apples"
             ),
 
             // =========================================================================
-            // STAGES 9–16: 8 EXTRA DUAL-ARMADILLO CO-OP STAGES
-            // Original Armadillo 1 (Golden) + Second Blue Armadillo 2
-            // Independent 2-finger joysticks, long levels, smart dual-targeting snakes
+            // ROUNDS 9–16: 8 DUAL-ARMADILLO SOLO MISSIONS (ONE PLAYER, TWO ARMS)
+            // Left Joystick: Golden Armadillo  |  Right Joystick: Blue Armadillo
             // =========================================================================
             StageConfig(
                 id = 9,
                 name = "Extra Garden",
-                subtitle = "Co-Op Woodlands",
+                subtitle = "Dual Woodlands",
                 icon = "🌿🌿",
                 theme = StageTheme.GARDEN,
                 targetFruits = 32,
@@ -300,8 +308,9 @@ data class StageConfig(
                 friction = 0.94f,
                 hasEscapingFruits = false,
                 isDualArmadillo = true,
+                maxAllowedLosses = 3,
                 description = "Long dual-armadillo woodland quest. Control the golden and blue armadillos independently with two joysticks to harvest fruit while evading the serpent.",
-                mechanicsBadge = "Two Armadillos • Dual Finger Joysticks • Split Escape • 32 Apples"
+                mechanicsBadge = "Dual Armadillos • Split Escape • 3 Losses Allowed • 32 Apples"
             ),
             StageConfig(
                 id = 10,
@@ -315,8 +324,9 @@ data class StageConfig(
                 friction = 0.94f,
                 hasEscapingFruits = false,
                 isDualArmadillo = true,
+                maxAllowedLosses = 3,
                 description = "Expansive dual-armadillo desert wasteland. Split up among sandstone boulders as the sidewinder dynamically targets whichever armadillo is closest.",
-                mechanicsBadge = "Two Armadillos • Sandstone Boulders • Targeted Pursuit • 40 Apples"
+                mechanicsBadge = "Dual Armadillos • Sandstone Boulders • 3 Losses Allowed • 40 Apples"
             ),
             StageConfig(
                 id = 11,
@@ -330,8 +340,9 @@ data class StageConfig(
                 friction = 0.94f,
                 hasEscapingFruits = true,
                 isDualArmadillo = true,
+                maxAllowedLosses = 2,
                 description = "Dense rainforest canopy requiring coordinated pincering maneuvers between both armadillos to catch fast escaping fruits while dodging the stalking snake.",
-                mechanicsBadge = "Two Armadillos • Escaping Fruits • Jungle Traps • 50 Apples"
+                mechanicsBadge = "Dual Armadillos • Escaping Fruits • 2 Losses Allowed • 50 Apples"
             ),
             StageConfig(
                 id = 12,
@@ -345,8 +356,9 @@ data class StageConfig(
                 friction = 0.94f,
                 hasMovingTraps = true,
                 isDualArmadillo = true,
+                maxAllowedLosses = 2,
                 description = "Dual high-altitude gauntlet with rolling boulders and dual serpents that test simultaneous two-finger coordination across narrow mountain crags.",
-                mechanicsBadge = "Two Armadillos • Rolling Boulders • Dual Serpents • 58 Apples"
+                mechanicsBadge = "Dual Armadillos • Rolling Boulders • 2 Losses Allowed • 58 Apples"
             ),
             StageConfig(
                 id = 13,
@@ -359,8 +371,9 @@ data class StageConfig(
                 baseSnakeSpeed = 172f,
                 friction = 0.94f,
                 isDualArmadillo = true,
+                maxAllowedLosses = 2,
                 description = "Treacherous magma field where both armadillos must navigate bubbling lava hazards while dual volcanic vipers apply relentless pressure.",
-                mechanicsBadge = "Two Armadillos • Magma Hazards • Relentless Pressure • 68 Apples"
+                mechanicsBadge = "Dual Armadillos • Magma Hazards • 2 Losses Allowed • 68 Apples"
             ),
             StageConfig(
                 id = 14,
@@ -373,8 +386,9 @@ data class StageConfig(
                 baseSnakeSpeed = 185f,
                 friction = 0.985f,
                 isDualArmadillo = true,
+                maxAllowedLosses = 2,
                 description = "Massive frozen ice sheet with near-frictionless momentum. Controlling two sliding armadillos simultaneously demands exceptional precision and reflexes.",
-                mechanicsBadge = "Two Armadillos • Frictionless Ice • Twin Serpents • 75 Apples"
+                mechanicsBadge = "Dual Armadillos • Frictionless Ice • 2 Losses Allowed • 75 Apples"
             ),
             StageConfig(
                 id = 15,
@@ -389,8 +403,9 @@ data class StageConfig(
                 hasEscapingFruits = true,
                 hasMovingTraps = true,
                 isDualArmadillo = true,
+                maxAllowedLosses = 2,
                 description = "Ancient subterranean labyrinth with arcane stone pillars, shifting traps, fast escaping fruits, and dual stalking shadow serpents.",
-                mechanicsBadge = "Two Armadillos • Dual Shadow Serpents • Arcane Traps • 85 Apples"
+                mechanicsBadge = "Dual Armadillos • Dual Shadow Serpents • 2 Losses Allowed • 85 Apples"
             ),
             StageConfig(
                 id = 16,
@@ -405,8 +420,9 @@ data class StageConfig(
                 hasEscapingFruits = true,
                 hasMovingTraps = true,
                 isDualArmadillo = true,
-                description = "The ultimate co-op dual-armadillo marathon: 3 apex predator serpents, shifting barriers, lava traps, and fast escaping fruits. The pinnacle challenge!",
-                mechanicsBadge = "Two Armadillos • 3 Apex Serpents • All Hazard Traps • 100 Apples"
+                maxAllowedLosses = 1,
+                description = "The ultimate dual-armadillo marathon: 3 apex predator serpents, shifting barriers, lava traps, and fast escaping fruits. The pinnacle challenge!",
+                mechanicsBadge = "Dual Armadillos • 3 Apex Serpents • 1 Loss Allowed • 100 Apples"
             )
         )
     }

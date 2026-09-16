@@ -17,6 +17,7 @@ class GameEngine(
     var onPowerActivated: (() -> Unit)? = null,
     var onPowerProtectedHit: (() -> Unit)? = null,
     var onStageCompleted: ((StageConfig, Int, Int, Int, Float) -> Unit)? = null,
+    var onGameOver: ((StageConfig, Int, Int, Int, Float) -> Unit)? = null,
     var onLavaHit: (() -> Unit)? = null,
     var onArmadilloSpawned: (() -> Unit)? = null
 ) {
@@ -24,12 +25,14 @@ class GameEngine(
     var boardHalfWidth: Float = 440f
     var boardHalfHeight: Float = 260f
 
-    // 8-Stage Progression State
+    // Stage Progression State
     var currentStage: StageConfig = StageConfig.ALL_STAGES[0]
         private set
     var stageFruitsCollected: Int = 0
         private set
     var isStageCompleted: Boolean = false
+        private set
+    var isGameOver: Boolean = false
         private set
 
     var armadillo = ArmadilloState(
@@ -240,6 +243,8 @@ class GameEngine(
             snake = snakes[0]
         }
 
+        isGameOver = false
+
         // Initialize Obstacles
         setupObstaclesForStage(stage)
 
@@ -250,9 +255,9 @@ class GameEngine(
 
         if (config.isSolo) {
             if (isDual) {
-                showBanner("🦔🔵 DUAL CO-OP: ${stage.name.uppercase()} — GOAL: ${stage.targetFruits} 🍎")
+                showBanner("🦔🔵 DUAL ARMADILLO: ${stage.name.uppercase()} — GOAL: ${stage.targetFruits} 🍎")
             } else {
-                showBanner("${stage.icon} STAGE ${stage.id}: ${stage.name.uppercase()} — GOAL: ${stage.targetFruits} 🍎")
+                showBanner("${stage.icon} ROUND ${stage.id}: ${stage.name.uppercase()} — GOAL: ${stage.targetFruits} 🍎")
             }
         } else {
             showBanner("${config.preset.icon} ${config.preset.title}: ${stage.name.uppercase()} — GOAL: ${stage.targetFruits} 🍎")
@@ -260,6 +265,15 @@ class GameEngine(
     }
 
     fun resetGame() {
+        loadStage(currentStage, currentMatchConfig)
+    }
+
+    fun resetRound() {
+        isGameOver = false
+        isStageCompleted = false
+        stats = stats.copy(score = 0, armadillosLost = 0)
+        stageFruitsCollected = 0
+        timeAliveSeconds = 0f
         loadStage(currentStage, currentMatchConfig)
     }
 
@@ -401,6 +415,10 @@ class GameEngine(
         snake2InputX: Float = 0f,
         snake2InputY: Float = 0f
     ) {
+        if (isGameOver) {
+            return
+        }
+
         val clampedDt = dt.coerceIn(0.001f, 0.05f)
         timeAliveSeconds += clampedDt
 
@@ -1165,7 +1183,7 @@ class GameEngine(
                     if (stageFruitsCollected >= currentStage.targetFruits && !isStageCompleted) {
                         isStageCompleted = true
                         spawnStageCelebrationParticles(armadillo.pos)
-                        showBanner("🎉 STAGE ${currentStage.id} COMPLETE!")
+                        showBanner("🎉 ROUND ${currentStage.id} COMPLETE!")
                         onStageCompleted?.invoke(
                             currentStage,
                             stats.score,
@@ -1222,7 +1240,7 @@ class GameEngine(
                     if (stageFruitsCollected >= currentStage.targetFruits && !isStageCompleted) {
                         isStageCompleted = true
                         spawnStageCelebrationParticles(a2.pos)
-                        showBanner("🎉 STAGE ${currentStage.id} COMPLETE!")
+                        showBanner("🎉 ROUND ${currentStage.id} COMPLETE!")
                         onStageCompleted?.invoke(
                             currentStage,
                             stats.score,
@@ -1290,6 +1308,12 @@ class GameEngine(
                         onScoreChanged?.invoke(newScore)
                         onArmadilloEaten?.invoke()
 
+                        if (newLost >= currentStage.maxAllowedLosses && !isGameOver && !isStageCompleted) {
+                            isGameOver = true
+                            showBanner("💀 GAME OVER! REACHED ${currentStage.maxAllowedLosses} LOSSES")
+                            onGameOver?.invoke(currentStage, newScore, stageFruitsCollected, newLost, timeAliveSeconds)
+                        }
+
                         armadillo = armadillo.copy(
                             isEaten = true,
                             eatenTimer = 0f,
@@ -1356,6 +1380,12 @@ class GameEngine(
                         stats = stats.copy(score = newScore, armadillosLost = newLost)
                         onScoreChanged?.invoke(newScore)
                         onArmadilloEaten?.invoke()
+
+                        if (newLost >= currentStage.maxAllowedLosses && !isGameOver && !isStageCompleted) {
+                            isGameOver = true
+                            showBanner("💀 GAME OVER! REACHED ${currentStage.maxAllowedLosses} LOSSES")
+                            onGameOver?.invoke(currentStage, newScore, stageFruitsCollected, newLost, timeAliveSeconds)
+                        }
 
                         armadillo2 = curA2.copy(
                             isEaten = true,
