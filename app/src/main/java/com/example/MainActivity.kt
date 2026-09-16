@@ -12,11 +12,14 @@ import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.Surface
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalLayoutDirection
+import androidx.compose.ui.unit.LayoutDirection
 import androidx.lifecycle.lifecycleScope
 import com.example.ads.AdManager
 import com.example.ui.ArmadilloEscapeScreen
@@ -49,16 +52,18 @@ class MainActivity : ComponentActivity() {
 
         setContent {
             ArmadilloEscapeTheme {
-                Surface(
-                    modifier = Modifier.fillMaxSize(),
-                    color = Color(0xFF140D08)
-                ) {
-                    ArmadilloEscapeScreen(
-                        isInPip = isInPipMode,
-                        onEnterPip = { enterPip() },
-                        onSetGameplayActive = { updatePipParams(it) },
-                        adManager = adManager
-                    )
+                CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Ltr) {
+                    Surface(
+                        modifier = Modifier.fillMaxSize(),
+                        color = Color(0xFF140D08)
+                    ) {
+                        ArmadilloEscapeScreen(
+                            isInPip = isInPipMode,
+                            onEnterPip = { enterPip() },
+                            onSetGameplayActive = { updatePipParams(it) },
+                            adManager = adManager
+                        )
+                    }
                 }
             }
         }

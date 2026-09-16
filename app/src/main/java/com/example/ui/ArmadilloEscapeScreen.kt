@@ -23,6 +23,7 @@ import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.absolutePadding
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -68,6 +69,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.withFrameNanos
+import androidx.compose.ui.AbsoluteAlignment
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -779,8 +781,8 @@ fun ArmadilloEscapeScreen(
                 // Dual Armadillo Joysticks: Left = Golden, Right = Blue
                 VirtualJoystick(
                     modifier = Modifier
-                        .align(Alignment.BottomStart)
-                        .padding(start = 18.dp, bottom = 12.dp),
+                        .align(AbsoluteAlignment.BottomLeft)
+                        .absolutePadding(left = 18.dp, bottom = 12.dp),
                     size = 122.dp,
                     label = "GOLDEN",
                     isBlueTheme = false,
@@ -793,8 +795,8 @@ fun ArmadilloEscapeScreen(
 
                 VirtualJoystick(
                     modifier = Modifier
-                        .align(Alignment.BottomEnd)
-                        .padding(end = 18.dp, bottom = 12.dp),
+                        .align(AbsoluteAlignment.BottomRight)
+                        .absolutePadding(right = 18.dp, bottom = 12.dp),
                     size = 122.dp,
                     label = "BLUE",
                     isBlueTheme = true,
@@ -858,17 +860,18 @@ fun ArmadilloEscapeScreen(
                 }
             } else {
                 // Single Joystick (Rounds 1–8) with per-round independent LEFT/RIGHT position
-                val isSingleJoystickRight = remember(currentStageId, currentScreen, showStageSelector, inGameSettingsVersion) {
+                val activeRoundId = gameEngine.currentStage.id
+                val isSingleJoystickRight = remember(activeRoundId, currentStageId, currentScreen, showStageSelector, inGameSettingsVersion) {
                     context.getSharedPreferences("armasnake_settings", 0)
-                        .getBoolean("single_joystick_right_round_$currentStageId", false)
+                        .getBoolean("single_joystick_right_round_$activeRoundId", false)
                 }
 
                 VirtualJoystick(
                     modifier = Modifier
-                        .align(if (isSingleJoystickRight) Alignment.BottomEnd else Alignment.BottomStart)
-                        .padding(
-                            start = if (isSingleJoystickRight) 0.dp else 22.dp,
-                            end = if (isSingleJoystickRight) 22.dp else 0.dp,
+                        .align(if (isSingleJoystickRight) AbsoluteAlignment.BottomRight else AbsoluteAlignment.BottomLeft)
+                        .absolutePadding(
+                            left = if (isSingleJoystickRight) 0.dp else 22.dp,
+                            right = if (isSingleJoystickRight) 22.dp else 0.dp,
                             bottom = 12.dp
                         ),
                     size = 126.dp,
