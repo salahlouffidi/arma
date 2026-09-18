@@ -15,9 +15,8 @@ import com.google.android.gms.ads.OnUserEarnedRewardListener
 /**
  * Centralized Google Mobile Ads integration for ARMASNAKE.
  *
- * Test ads stay enabled while the v1.2 build is being developed and tested.
- * Replace USE_TEST_ADS with false only for a release that is intentionally
- * configured to serve the real ARMASNAKE AdMob units.
+ * Production ads are enabled for release builds using the ARMASNAKE
+ * AdMob units configured below.
  */
 class AdManager(private val context: Context) {
 
@@ -136,10 +135,10 @@ class AdManager(private val context: Context) {
         private const val PROD_REWARDED_AD_UNIT_ID = "ca-app-pub-3521560929268417/5578306837"
         private const val PROD_INTERSTITIAL_AD_UNIT_ID = "ca-app-pub-3521560929268417/6699816813"
 
-        // Official Google test units. Safe for development and closed testing.
+        // Official Google test units, kept available for future development builds.
         private const val TEST_REWARDED_AD_UNIT_ID = "ca-app-pub-3940256099942544/5224354917"
         private const val TEST_INTERSTITIAL_AD_UNIT_ID = "ca-app-pub-3940256099942544/1033173712"
 
-        private const val USE_TEST_ADS = true
+        private const val USE_TEST_ADS = false
     }
 }
