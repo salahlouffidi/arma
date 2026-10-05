@@ -91,6 +91,25 @@ class GameEngine(
         private set
     private var rareSpawnTimer: Float = FIRST_RARE_DELAY
 
+    // --- Presentation / "world reaction" state read by the renderer & HUD ---
+    // Round-intro card countdown (set when a stage loads).
+    var roundIntroTimer: Float = 0f
+        private set
+    // Controlled camera impulse (decays quickly; amplitude in px).
+    var cameraShake: Float = 0f
+        private set
+    // Brief environment glow around the arena on powerful pickups.
+    var worldPulse: Float = 0f
+        private set
+    var worldPulseColor: Color = Color(0xFFFFD54F)
+        private set
+
+    private fun triggerWorldReaction(shake: Float, pulse: Float, color: Color) {
+        cameraShake = maxOf(cameraShake, shake)
+        worldPulse = maxOf(worldPulse, pulse)
+        worldPulseColor = color
+    }
+
     var stats = GameStats()
         private set
 
@@ -282,6 +301,9 @@ class GameEngine(
         scoreMultiplierTimer = 0f
         activeRareFruitPos = null
         rareSpawnTimer = FIRST_RARE_DELAY
+        roundIntroTimer = ROUND_INTRO_DURATION
+        cameraShake = 0f
+        worldPulse = 0f
 
         if (config.isSolo) {
             if (isDual) {
@@ -508,6 +530,9 @@ class GameEngine(
             if (comboTimer <= 0f) comboCount = 0
         }
         if (scoreMultiplierTimer > 0f) scoreMultiplierTimer -= clampedDt
+        if (roundIntroTimer > 0f) roundIntroTimer = (roundIntroTimer - clampedDt).coerceAtLeast(0f)
+        if (cameraShake > 0f) cameraShake = (cameraShake - clampedDt * 28f).coerceAtLeast(0f)
+        if (worldPulse > 0f) worldPulse = (worldPulse - clampedDt * 1.6f).coerceAtLeast(0f)
 
         updateObstacles(clampedDt)
         updateSnakes(clampedDt, snake1InputX, snake1InputY, snake2InputX, snake2InputY)
@@ -678,6 +703,7 @@ class GameEngine(
                         stats = stats.copy(score = newScore)
                         onScoreChanged?.invoke(newScore)
                         onLavaHit?.invoke()
+                        triggerWorldReaction(4f, 0.5f, Color(0xFFFF6D00))
                         spawnLavaParticles(Vector2(newPosX, newPosY))
                         showBanner("🔥 LAVA HAZARD! −1")
                         armadillo = armadillo.copy(invulnerableTimer = 1.3f)
@@ -848,6 +874,7 @@ class GameEngine(
                         stats = stats.copy(score = newScore)
                         onScoreChanged?.invoke(newScore)
                         onLavaHit?.invoke()
+                        triggerWorldReaction(4f, 0.5f, Color(0xFFFF6D00))
                         spawnLavaParticles(Vector2(newPosX, newPosY))
                         showBanner("🔥 LAVA HAZARD! −1")
                         armadillo2 = a2.copy(invulnerableTimer = 1.3f)
@@ -1333,6 +1360,7 @@ class GameEngine(
                     stageFruitsCollected++
                     if (stageFruitsCollected >= currentStage.targetFruits && !isStageCompleted) {
                         isStageCompleted = true
+                        triggerWorldReaction(4f, 1f, Color(0xFFFFD700))
                         spawnStageCelebrationParticles(armadillo.pos)
                         showBanner("🎉 ROUND ${currentStage.id} COMPLETE!")
                         onStageCompleted?.invoke(
@@ -1374,6 +1402,7 @@ class GameEngine(
                     stageFruitsCollected++
                     if (stageFruitsCollected >= currentStage.targetFruits && !isStageCompleted) {
                         isStageCompleted = true
+                        triggerWorldReaction(4f, 1f, Color(0xFFFFD700))
                         spawnStageCelebrationParticles(a2.pos)
                         showBanner("🎉 ROUND ${currentStage.id} COMPLETE!")
                         onStageCompleted?.invoke(
@@ -1421,6 +1450,7 @@ class GameEngine(
 
                         spawnPowerShieldHitParticles(armadillo.pos)
                         onPowerProtectedHit?.invoke()
+                        triggerWorldReaction(6f, 0.6f, Color(0xFF00E5FF))
 
                         armadillo = armadillo.copy(
                             isPowerActive = false,
@@ -1444,6 +1474,7 @@ class GameEngine(
                         stats = stats.copy(score = newScore, armadillosLost = newLost)
                         onScoreChanged?.invoke(newScore)
                         onArmadilloEaten?.invoke()
+                        triggerWorldReaction(9f, 0.8f, Color(0xFFFF1744))
 
                         if (newLost >= currentStage.maxAllowedLosses && !isGameOver && !isStageCompleted) {
                             isGameOver = true
@@ -1494,6 +1525,7 @@ class GameEngine(
 
                         spawnPowerShieldHitParticles(curA2.pos)
                         onPowerProtectedHit?.invoke()
+                        triggerWorldReaction(6f, 0.6f, Color(0xFF00E5FF))
 
                         armadillo2 = curA2.copy(
                             isPowerActive = false,
@@ -1517,6 +1549,7 @@ class GameEngine(
                         stats = stats.copy(score = newScore, armadillosLost = newLost)
                         onScoreChanged?.invoke(newScore)
                         onArmadilloEaten?.invoke()
+                        triggerWorldReaction(9f, 0.8f, Color(0xFFFF1744))
 
                         if (newLost >= currentStage.maxAllowedLosses && !isGameOver && !isStageCompleted) {
                             isGameOver = true
@@ -1988,20 +2021,24 @@ class GameEngine(
     private fun applyEffectToArmadillo(arm: ArmadilloState, effect: FruitEffect, isBlue: Boolean): ArmadilloState {
         return when (effect) {
             FruitEffect.SPEED -> {
+                triggerWorldReaction(6f, 1f, Color(0xFF00E5FF))
                 onPowerActivated?.invoke()
                 spawnPowerBurstParticles(arm.pos)
                 showBanner(if (isBlue) "⚡ BLUE ARMADILLO OVERDRIVE!" else if (armadillo2 != null) "⚡ GOLDEN ARMADILLO OVERDRIVE!" else "⚡ SPECIAL OVERDRIVE ACTIVE")
                 arm.copy(isPowerActive = true, powerTimer = 10f, powerChancesRemaining = 1, invulnerableTimer = 0.5f, eatBounceTimer = 0.24f)
             }
             FruitEffect.MAGNET -> {
+                triggerWorldReaction(3f, 0.7f, Color(0xFFE040FB))
                 showBanner(if (isBlue) "🧲 BLUE MAGNET ACTIVE!" else "🧲 MAGNET ACTIVE!")
                 arm.copy(magnetTimer = MAGNET_DURATION, eatBounceTimer = 0.24f)
             }
             FruitEffect.RAINBOW -> {
+                triggerWorldReaction(7f, 1f, Color(0xFFFFFFFF))
                 showBanner(if (isBlue) "🌈 BLUE RAINBOW x2!" else "🌈 RAINBOW x2 SCORE!")
                 arm.copy(rainbowTimer = RAINBOW_DURATION, eatBounceTimer = 0.24f)
             }
             FruitEffect.DIAMOND -> {
+                triggerWorldReaction(5f, 0.9f, Color(0xFF80DEEA))
                 showBanner("💎 DIAMOND BONUS!")
                 arm.copy(eatBounceTimer = 0.28f)
             }
@@ -2049,8 +2086,9 @@ class GameEngine(
     companion object {
         private const val MAX_PARTICLES = 180
         private const val COMBO_WINDOW = 2.2f
-        private const val RAINBOW_DURATION = 7f
-        private const val MAGNET_DURATION = 6f
+        const val RAINBOW_DURATION = 7f
+        const val MAGNET_DURATION = 6f
+        const val ROUND_INTRO_DURATION = 2.6f
         private const val FIRST_RARE_DELAY = 14f
         private const val RARE_RESPAWN_MIN = 13f
         private const val RARE_RESPAWN_JITTER = 10f

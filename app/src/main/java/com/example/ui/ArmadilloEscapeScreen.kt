@@ -19,6 +19,7 @@ import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -74,6 +75,7 @@ import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.AbsoluteAlignment
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.geometry.Offset
@@ -507,35 +509,65 @@ fun ArmadilloEscapeScreen(
             // Read tick to trigger recomposition
             @Suppress("UNUSED_VARIABLE")
             val currentTick = tick
+            val stageTheme = gameEngine.currentStage.theme
+            val animTime = ((frameTimeNanos / 1_000_000L) % 600_000L) / 1000f
+
+            // 0. Animated themed ambient backdrop (never shaken)
+            TableRenderer.drawBackdrop(
+                scope = this,
+                width = size.width,
+                height = size.height,
+                theme = stageTheme,
+                time = animTime
+            )
+
+            // Controlled camera impulse: shift the whole world around a shaken centre.
+            val shake = gameEngine.cameraShake
+            val wc = if (shake > 0.05f) {
+                Offset(
+                    tableCenter.x + kotlin.math.sin(tick * 1.7f) * shake,
+                    tableCenter.y + kotlin.math.cos(tick * 2.3f) * shake
+                )
+            } else tableCenter
 
             // 1. Draw Fixed Themed Table
             TableRenderer.drawTable(
                 scope = this,
-                center = tableCenter,
+                center = wc,
                 halfW = tableHalfW,
                 halfH = tableHalfH,
-                theme = gameEngine.currentStage.theme
+                theme = stageTheme
+            )
+
+            // 1a. Environment reaction glow around the arena (big pickups / hits / round clear)
+            TableRenderer.drawWorldPulse(
+                scope = this,
+                center = wc,
+                halfW = tableHalfW,
+                halfH = tableHalfH,
+                pulse = gameEngine.worldPulse,
+                color = gameEngine.worldPulseColor
             )
 
             // 1b. Draw Obstacles
             TableRenderer.drawObstacles(
                 scope = this,
                 obstacles = gameEngine.obstacles,
-                boardCenter = tableCenter
+                boardCenter = wc
             )
 
             // 2. Draw Apples
             TableRenderer.drawApples(
                 scope = this,
                 apples = gameEngine.apples,
-                boardCenter = tableCenter
+                boardCenter = wc
             )
 
             // 3. Draw 3D Armadillos
             TableRenderer.drawArmadillo(
                 scope = this,
                 armadillo = gameEngine.armadillo,
-                boardCenter = tableCenter,
+                boardCenter = wc,
                 isBlue = false
             )
             val a2 = gameEngine.armadillo2
@@ -543,7 +575,7 @@ fun ArmadilloEscapeScreen(
                 TableRenderer.drawArmadillo(
                     scope = this,
                     armadillo = a2,
-                    boardCenter = tableCenter,
+                    boardCenter = wc,
                     isBlue = true
                 )
             }
@@ -552,21 +584,21 @@ fun ArmadilloEscapeScreen(
             TableRenderer.drawSnakes(
                 scope = this,
                 snakes = gameEngine.snakes,
-                boardCenter = tableCenter
+                boardCenter = wc
             )
 
             // 5. Draw Particles
             TableRenderer.drawParticles(
                 scope = this,
                 particles = gameEngine.particles,
-                boardCenter = tableCenter
+                boardCenter = wc
             )
 
             // 5b. Rare power-up beacon: pulsing ring + bobbing chevron pointing down at it
             val rarePos = gameEngine.activeRareFruitPos
             if (rarePos != null) {
-                val bx = tableCenter.x + rarePos.x
-                val by = tableCenter.y + rarePos.y
+                val bx = wc.x + rarePos.x
+                val by = wc.y + rarePos.y
                 val pulse = (kotlin.math.sin(tick * 0.2f) * 0.5f + 0.5f)
                 drawCircle(
                     color = Color(0xFFFFEA00).copy(alpha = 0.25f + 0.35f * pulse),
@@ -587,7 +619,7 @@ fun ArmadilloEscapeScreen(
             TableRenderer.drawFloatingTexts(
                 scope = this,
                 texts = gameEngine.floatingTexts,
-                boardCenter = tableCenter,
+                boardCenter = wc,
                 measurer = textMeasurer
             )
         }
@@ -837,47 +869,13 @@ fun ArmadilloEscapeScreen(
                     .padding(end = 88.dp)
             )
 
-            // Combo indicator (only while a chain is active) — centered just under the HUD row
-            val comboMult = gameEngine.comboMultiplier()
-            if (comboMult >= 2) {
-                Surface(
-                    color = Color(0xE6311B06),
-                    shape = RoundedCornerShape(12.dp),
-                    border = androidx.compose.foundation.BorderStroke(1.5.dp, Color(0xFFFFEA00)),
-                    modifier = Modifier
-                        .align(Alignment.TopCenter)
-                        .padding(top = 50.dp)
-                ) {
-                    Text(
-                        text = "🔥 COMBO x$comboMult",
-                        color = Color(0xFFFFEA00),
-                        fontSize = 13.sp,
-                        fontWeight = FontWeight.ExtraBold,
-                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp)
-                    )
-                }
-            }
-
-            // First-run teaching hint on Round 1 (fades out after a few seconds)
-            if (gameEngine.currentStage.id == 1 && showFirstRunHint) {
-                Surface(
-                    color = Color(0xCC1B1206),
-                    shape = RoundedCornerShape(12.dp),
-                    border = androidx.compose.foundation.BorderStroke(1.dp, Color(0x8081C784)),
-                    modifier = Modifier
-                        .align(Alignment.BottomCenter)
-                        .padding(bottom = 92.dp)
-                ) {
-                    Text(
-                        text = "Drag to move • Grab 🍎 • Chain bites for COMBOS • Catch glowing ⚡💎🧲🌈 power fruit!",
-                        color = Color(0xFFFFE0B2),
-                        fontSize = 11.5.sp,
-                        fontWeight = FontWeight.SemiBold,
-                        textAlign = TextAlign.Center,
-                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp)
-                    )
-                }
-            }
+            // Juice overlays (combo, effect timers, round intro, banner, first-run hint).
+            // Isolated composable that subscribes to the frame counter so only it recomposes per frame.
+            JuiceOverlays(
+                gameEngine = gameEngine,
+                frame = { tick },
+                showFirstRunHint = showFirstRunHint
+            )
         }
 
 
@@ -2006,6 +2004,209 @@ private fun GameOverDialog(
                     }
                 }
             }
+        }
+    }
+}
+
+@Composable
+private fun EffectTimerPill(label: String, secondsLeft: Float, fraction: Float, accent: Color) {
+    Surface(
+        color = Color(0xE61A0F06),
+        shape = RoundedCornerShape(10.dp),
+        border = androidx.compose.foundation.BorderStroke(1.dp, accent.copy(alpha = 0.8f))
+    ) {
+        Column(modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(text = label, color = accent, fontSize = 10.sp, fontWeight = FontWeight.ExtraBold)
+                Spacer(modifier = Modifier.width(6.dp))
+                Text(
+                    text = String.format(java.util.Locale.US, "%.1fs", secondsLeft),
+                    color = Color(0xFFFFE0B2),
+                    fontSize = 10.sp,
+                    fontWeight = FontWeight.Bold
+                )
+            }
+            Spacer(modifier = Modifier.height(3.dp))
+            Box(
+                modifier = Modifier
+                    .width(92.dp)
+                    .height(4.dp)
+                    .clip(RoundedCornerShape(2.dp))
+                    .background(Color(0x40FFFFFF))
+            ) {
+                Box(
+                    modifier = Modifier
+                        .height(4.dp)
+                        .fillMaxWidth(fraction.coerceIn(0f, 1f))
+                        .background(accent)
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun BoxScope.JuiceOverlays(
+    gameEngine: GameEngine,
+    frame: () -> Long,
+    showFirstRunHint: Boolean
+) {
+    // Reading the frame counter here makes ONLY this overlay recompose every frame,
+    // so countdowns, fades and the combo chip stay live without recomposing the whole HUD.
+    @Suppress("UNUSED_VARIABLE")
+    val currentFrame = frame()
+
+    // Combo indicator (only while a chain is active) — centered just under the HUD row
+    val comboMult = gameEngine.comboMultiplier()
+    if (comboMult >= 2) {
+        Surface(
+            color = Color(0xE6311B06),
+            shape = RoundedCornerShape(12.dp),
+            border = androidx.compose.foundation.BorderStroke(1.5.dp, Color(0xFFFFEA00)),
+            modifier = Modifier
+                .align(Alignment.TopCenter)
+                .padding(top = 50.dp)
+        ) {
+            Text(
+                text = "🔥 COMBO x$comboMult",
+                color = Color(0xFFFFEA00),
+                fontSize = 13.sp,
+                fontWeight = FontWeight.ExtraBold,
+                modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp)
+            )
+        }
+    }
+
+    // ---------- Active power-up effect timers (Magnet / Rainbow) ----------
+    val magnetLeft = maxOf(gameEngine.armadillo.magnetTimer, gameEngine.armadillo2?.magnetTimer ?: 0f)
+    val rainbowLeft = maxOf(gameEngine.armadillo.rainbowTimer, gameEngine.armadillo2?.rainbowTimer ?: 0f)
+    if (magnetLeft > 0f || rainbowLeft > 0f) {
+        Column(
+            verticalArrangement = Arrangement.spacedBy(4.dp),
+            modifier = Modifier
+                .align(Alignment.TopStart)
+                .padding(start = 8.dp, top = 50.dp)
+        ) {
+            if (magnetLeft > 0f) {
+                EffectTimerPill(
+                    label = "🧲 MAGNET",
+                    secondsLeft = magnetLeft,
+                    fraction = magnetLeft / GameEngine.MAGNET_DURATION,
+                    accent = Color(0xFFE040FB)
+                )
+            }
+            if (rainbowLeft > 0f) {
+                EffectTimerPill(
+                    label = "🌈 SCORE x2",
+                    secondsLeft = rainbowLeft,
+                    fraction = rainbowLeft / GameEngine.RAINBOW_DURATION,
+                    accent = Color(0xFFFFEA00)
+                )
+            }
+        }
+    }
+
+    // ---------- Round intro card (animated in/out at the start of every round) ----------
+    val introT = gameEngine.roundIntroTimer
+    if (introT > 0f) {
+        val elapsed = GameEngine.ROUND_INTRO_DURATION - introT
+        val introAlpha = (elapsed / 0.25f).coerceIn(0f, 1f) * (introT / 0.5f).coerceIn(0f, 1f)
+        val introScale = 0.85f + 0.15f * (elapsed / 0.3f).coerceIn(0f, 1f)
+        val st = gameEngine.currentStage
+        Surface(
+            color = Color(0xE61A0F06),
+            shape = RoundedCornerShape(20.dp),
+            border = androidx.compose.foundation.BorderStroke(2.dp, Color(0xFFD4AF37)),
+            modifier = Modifier
+                .align(Alignment.Center)
+                .scale(introScale)
+                .alpha(introAlpha)
+        ) {
+            Column(
+                horizontalAlignment = Alignment.CenterHorizontally,
+                modifier = Modifier.padding(horizontal = 26.dp, vertical = 16.dp)
+            ) {
+                Text(text = st.icon, fontSize = 34.sp)
+                Text(
+                    text = "ROUND ${st.id} / 16",
+                    color = Color(0xFFFFCC80),
+                    fontSize = 12.sp,
+                    fontWeight = FontWeight.Bold
+                )
+                Text(
+                    text = st.name.uppercase(),
+                    color = Color(0xFFFFD54F),
+                    fontSize = 26.sp,
+                    fontWeight = FontWeight.Black
+                )
+                Text(
+                    text = st.subtitle,
+                    color = Color(0xFFFFE0B2),
+                    fontSize = 12.sp,
+                    fontWeight = FontWeight.Medium
+                )
+                Spacer(modifier = Modifier.height(6.dp))
+                Text(
+                    text = st.mechanicsBadge,
+                    color = Color(0xFFC8E6C9),
+                    fontSize = 10.5.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    textAlign = TextAlign.Center
+                )
+                Spacer(modifier = Modifier.height(4.dp))
+                Text(
+                    text = "GOAL: ${st.targetFruits} 🍎",
+                    color = Color(0xFFFF8A65),
+                    fontSize = 13.sp,
+                    fontWeight = FontWeight.ExtraBold
+                )
+            }
+        }
+    }
+
+    // ---------- In-game banner toast (engine messages: power-ups, hazards, events) ----------
+    val bannerText = gameEngine.bannerMessage
+    if (bannerText != null && introT <= 0f) {
+        val bannerAlpha = (gameEngine.bannerTimer / 0.35f).coerceIn(0f, 1f)
+        Surface(
+            color = Color(0xE6140A04),
+            shape = RoundedCornerShape(14.dp),
+            border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xA0D4AF37)),
+            modifier = Modifier
+                .align(Alignment.TopCenter)
+                .padding(top = 82.dp)
+                .alpha(bannerAlpha)
+        ) {
+            Text(
+                text = bannerText,
+                color = Color(0xFFFFE0B2),
+                fontSize = 12.sp,
+                fontWeight = FontWeight.Bold,
+                textAlign = TextAlign.Center,
+                maxLines = 2,
+                modifier = Modifier.padding(horizontal = 12.dp, vertical = 5.dp)
+            )
+        }
+    }
+
+    // First-run teaching hint on Round 1 (fades out after a few seconds)
+    if (gameEngine.currentStage.id == 1 && showFirstRunHint) {
+        Surface(
+            color = Color(0xCC1B1206),
+            shape = RoundedCornerShape(12.dp),
+            border = androidx.compose.foundation.BorderStroke(1.dp, Color(0x8081C784)),
+            modifier = Modifier
+                .align(Alignment.BottomCenter)
+                .padding(bottom = 92.dp)
+        ) {
+            Text(
+                text = "Drag to move • Grab 🍎 • Chain bites for COMBOS • Catch glowing ⚡💎🧲🌈 power fruit!",
+                color = Color(0xFFFFE0B2),
+                fontSize = 11.5.sp,
+                fontWeight = FontWeight.SemiBold,
+                textAlign = TextAlign.Center,
+                modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp)
+            )
         }
     }
 }

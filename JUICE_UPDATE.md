@@ -41,6 +41,36 @@ procedural and offline.
 
 ---
 
+## Pass 2 — Graphics, rounds & styling
+
+**Graphics / atmosphere**
+- **Animated themed backdrop** behind the table for all 8 themes: radial lighting, drifting motes
+  (rising embers on Volcano/Temple/Arena, falling snow on Ice/Mountains, floating dust/fireflies
+  elsewhere) and a soft vignette. Allocation-free — mote positions are derived from index + time.
+- **Table lighting**: warm key light from the upper-left and a gentle shadow toward the far edge.
+- **Readability**: each armadillo gets a soft golden/blue ground glow (instantly identifiable at
+  speed); each snake head gets a pulsing red threat glow and glowing eyes (danger reads at a glance).
+- **Richer particles**: larger sparks get a soft glow halo (small ones stay cheap).
+- **Environment reaction**: big moments trigger a coloured glowing rim around the arena plus a short,
+  controlled camera impulse — cyan for overdrive, white for rainbow, cyan-white for diamond, magenta
+  for magnet, red when a snake catches you, gold on round clear. Normal bites stay subtle (no shake).
+
+**Rounds**
+- **Animated round-intro card** at the start of every round: stage icon, `ROUND n / 16`, name,
+  subtitle, mechanics badge and fruit goal — scales/fades in and out (~2.6 s).
+- **Fixed: in-game banners were never displayed.** The engine has always produced messages (round
+  goal, "POWER EXPIRED", "LAVA HAZARD", "SPECIAL FRUIT EVENT", the new power-up alerts…) but the
+  screen never rendered them. They now appear as a fading toast under the HUD.
+
+**Styling / HUD**
+- **Active-effect timer pills** (top-left) for 🧲 Magnet and 🌈 Score x2 with a live countdown and a
+  draining bar.
+- Overlays (combo chip, timer pills, round intro, banner, first-run hint) live in an isolated
+  `JuiceOverlays` composable that subscribes to the frame counter, so they refresh every frame
+  without recomposing the whole HUD.
+
+---
+
 ## Files changed
 
 - `game/GameModels.kt` — new `FruitType`s (DIAMOND/MAGNET/RAINBOW), `FloatingText`, and additive

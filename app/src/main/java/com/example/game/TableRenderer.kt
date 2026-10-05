@@ -188,6 +188,89 @@ object TableRenderer {
         }
     }
 
+    /** Ambient backdrop colours per theme: (deep edge, mid, warm centre glow, mote colour). */
+    private fun backdropColors(theme: StageTheme): List<Color> = when (theme) {
+        StageTheme.GARDEN -> listOf(Color(0xFF070F06), Color(0xFF12230F), Color(0xFF2E4A1C), Color(0x55C5E1A5))
+        StageTheme.DESERT -> listOf(Color(0xFF140A03), Color(0xFF3A1F0A), Color(0xFF7A4318), Color(0x55FFE0B2))
+        StageTheme.JUNGLE -> listOf(Color(0xFF020A05), Color(0xFF07200F), Color(0xFF145A2E), Color(0x5569F0AE))
+        StageTheme.MOUNTAINS -> listOf(Color(0xFF05090D), Color(0xFF15222C), Color(0xFF3C5566), Color(0x55ECEFF1))
+        StageTheme.VOLCANO -> listOf(Color(0xFF0A0201), Color(0xFF2A0703), Color(0xFF7A1A05), Color(0x66FF9100))
+        StageTheme.ICE -> listOf(Color(0xFF02101A), Color(0xFF0A2A3C), Color(0xFF1F6A85), Color(0x66E0F7FA))
+        StageTheme.DARK_TEMPLE -> listOf(Color(0xFF040108), Color(0xFF140722), Color(0xFF3A1263), Color(0x55E040FB))
+        StageTheme.FINAL_ARENA -> listOf(Color(0xFF0A0602), Color(0xFF2A1A06), Color(0xFF6B4A0E), Color(0x66FFD700))
+    }
+
+    /**
+     * Full-screen animated ambient backdrop behind the table: themed radial lighting,
+     * slowly drifting motes (embers / snow / fireflies / dust), and a soft vignette.
+     * Allocation-free per mote (positions derived from index + time).
+     */
+    fun drawBackdrop(scope: DrawScope, width: Float, height: Float, theme: StageTheme, time: Float) {
+        val c = backdropColors(theme)
+        val center = Offset(width / 2f, height * 0.48f)
+        scope.drawRect(
+            brush = Brush.radialGradient(
+                colors = listOf(c[2], c[1], c[0]),
+                center = center,
+                radius = maxOf(width, height) * 0.75f
+            ),
+            size = Size(width, height)
+        )
+        // Drifting motes: embers rise (volcano), snow falls (ice), others float.
+        val rising = theme == StageTheme.VOLCANO || theme == StageTheme.FINAL_ARENA || theme == StageTheme.DARK_TEMPLE
+        val falling = theme == StageTheme.ICE || theme == StageTheme.MOUNTAINS
+        for (i in 0 until 26) {
+            val seedX = ((i * 73) % 100) / 100f
+            val seedY = ((i * 37) % 100) / 100f
+            val speed = 0.015f + (i % 5) * 0.006f
+            val drift = when {
+                rising -> -time * speed
+                falling -> time * speed
+                else -> sin(time * 0.3f + i) * 0.02f
+            }
+            val y = ((seedY + drift) % 1f + 1f) % 1f
+            val x = seedX + sin(time * 0.5f + i * 1.7f) * 0.015f
+            val twinkle = 0.5f + 0.5f * sin(time * 2f + i * 2.3f)
+            scope.drawCircle(
+                color = c[3].copy(alpha = c[3].alpha * (0.4f + 0.6f * twinkle)),
+                radius = 1.5f + (i % 3) * 1.1f,
+                center = Offset(x * width, y * height)
+            )
+        }
+        // Vignette
+        scope.drawRect(
+            brush = Brush.radialGradient(
+                colors = listOf(Color.Transparent, Color(0x99000000)),
+                center = center,
+                radius = maxOf(width, height) * 0.7f
+            ),
+            size = Size(width, height)
+        )
+    }
+
+    /** Environment reaction: a soft glowing rim around the arena that fades out after big moments. */
+    fun drawWorldPulse(scope: DrawScope, center: Offset, halfW: Float, halfH: Float, pulse: Float, color: Color) {
+        if (pulse <= 0.01f) return
+        val a = pulse.coerceIn(0f, 1f)
+        for (k in 0 until 3) {
+            val grow = 6f + k * 9f + (1f - a) * 14f
+            scope.drawRoundRect(
+                color = color.copy(alpha = 0.32f * a / (k + 1)),
+                topLeft = Offset(center.x - halfW - grow, center.y - halfH - grow),
+                size = Size((halfW + grow) * 2f, (halfH + grow) * 2f),
+                cornerRadius = CornerRadius(30f + grow, 30f + grow),
+                style = Stroke(width = 6f - k * 1.5f)
+            )
+        }
+        // faint wash over the board surface
+        scope.drawRoundRect(
+            color = color.copy(alpha = 0.07f * a),
+            topLeft = Offset(center.x - halfW, center.y - halfH),
+            size = Size(halfW * 2f, halfH * 2f),
+            cornerRadius = CornerRadius(14f, 14f)
+        )
+    }
+
     fun drawTable(
         scope: DrawScope,
         center: Offset,
@@ -327,6 +410,26 @@ object TableRenderer {
             size = Size(width - 12f, height - 12f),
             cornerRadius = CornerRadius(10f, 10f),
             style = Stroke(width = 8f)
+        )
+
+        // 5b. Surface lighting: warm key light from upper-left, gentle falloff to the far edge
+        scope.drawRect(
+            brush = Brush.radialGradient(
+                colors = listOf(Color(0x24FFF3E0), Color(0x00FFF3E0)),
+                center = Offset(left + width * 0.3f, top + height * 0.25f),
+                radius = maxOf(width, height) * 0.7f
+            ),
+            topLeft = Offset(left, top),
+            size = Size(width, height)
+        )
+        scope.drawRect(
+            brush = Brush.verticalGradient(
+                colors = listOf(Color(0x00000000), Color(0x2E000000)),
+                startY = top + height * 0.55f,
+                endY = top + height
+            ),
+            topLeft = Offset(left, top + height * 0.55f),
+            size = Size(width, height * 0.45f)
         )
 
         // 6. Polished Themed Corner Brackets
@@ -568,6 +671,18 @@ object TableRenderer {
 
         val heading = armadillo.headingAngle
         val headingDeg = (heading * 180f / PI).toFloat()
+
+        // Player identification: soft coloured ground glow so the armadillo reads instantly at speed
+        val idGlow = if (isBlue) Color(0xFF40C4FF) else Color(0xFFFFC94D)
+        scope.drawCircle(
+            brush = Brush.radialGradient(
+                colors = listOf(idGlow.copy(alpha = 0.38f * scale), idGlow.copy(alpha = 0f)),
+                center = Offset(cx, cy + 4f),
+                radius = 44f
+            ),
+            radius = 44f,
+            center = Offset(cx, cy + 4f)
+        )
 
         // Distinct 7araka Electric/Energy Aura around the Armadillo
         if (armadillo.isPowerActive) {
@@ -997,6 +1112,18 @@ object TableRenderer {
             )
         }
 
+        // Danger cue: pulsing red threat glow under the head so the hazard reads instantly
+        val threatPulse = 0.5f + 0.5f * sin(snake.slitherPhase * 0.8f)
+        scope.drawCircle(
+            brush = Brush.radialGradient(
+                colors = listOf(Color(0x66FF1744), Color(0x00FF1744)),
+                center = Offset(headX, headY),
+                radius = 34f + 5f * threatPulse
+            ),
+            radius = 34f + 5f * threatPulse,
+            center = Offset(headX, headY)
+        )
+
         // 3. Snake Head
         val headAngleDeg = (snake.headAngle * 180f / PI).toFloat()
         scope.withTransform({
@@ -1055,6 +1182,10 @@ object TableRenderer {
             val nostrilColor = if (snakeIndex == 1) Color(0xFF1E0738) else Color(0xFF0D3310)
             drawCircle(nostrilColor, radius = 1.2f, center = Offset(19f, -2f))
             drawCircle(nostrilColor, radius = 1.2f, center = Offset(19f, 2f))
+
+            // Eye glow halos (predator stare stays visible on dark themes)
+            drawCircle(color = eyeColor.copy(alpha = 0.35f), radius = 6.5f, center = Offset(11f, -9.5f))
+            drawCircle(color = eyeColor.copy(alpha = 0.35f), radius = 6.5f, center = Offset(11f, 9.5f))
 
             // Sinister Predatory Eyes (amber-yellow or electric magenta with black slit)
             // Left Eye
@@ -1464,6 +1595,14 @@ object TableRenderer {
         for (p in particles) {
             val px = boardCenter.x + p.pos.x
             val py = boardCenter.y + p.pos.y
+            if (p.size > 6f) {
+                // soft glow halo on the bigger sparks only (keeps draw calls bounded)
+                scope.drawCircle(
+                    color = p.color.copy(alpha = p.alpha * 0.28f),
+                    radius = p.size * p.alpha * 1.9f,
+                    center = Offset(px, py)
+                )
+            }
             scope.drawCircle(
                 color = p.color.copy(alpha = p.alpha),
                 radius = p.size * p.alpha,
