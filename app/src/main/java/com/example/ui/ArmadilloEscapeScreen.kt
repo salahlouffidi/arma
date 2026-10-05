@@ -35,6 +35,8 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.ui.text.rememberTextMeasurer
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -77,6 +79,8 @@ import androidx.compose.ui.draw.scale
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
@@ -136,6 +140,7 @@ fun ArmadilloEscapeScreen(
     val haptics = remember { HapticFeedbackHelper(context) }
     val progressManager = remember { StageProgressManager(context) }
     val soundManager = remember { SoundManager(context) }
+    val textMeasurer = rememberTextMeasurer()
 
     var currentScreen by remember { mutableStateOf(GameScreenState.INTRO) }
     var activeMatchConfig by remember { mutableStateOf(MatchConfig.solo()) }
@@ -150,6 +155,7 @@ fun ArmadilloEscapeScreen(
     var isGamePaused by remember { mutableStateOf(false) }
     var showInGameSettings by remember { mutableStateOf(false) }
     var inGameSettingsVersion by remember { mutableIntStateOf(0) }
+    var showFirstRunHint by remember { mutableStateOf(true) }
 
     // Virtual Joystick Finger Input Vectors (Continuous Normalized: -1f..1f)
     // P1 (Golden Armadillo)
@@ -192,6 +198,17 @@ fun ArmadilloEscapeScreen(
 
     LaunchedEffect(currentScreen) {
         onSetGameplayActive?.invoke(currentScreen == GameScreenState.GAMEPLAY)
+    }
+
+    // First-run teaching hint: show briefly whenever Round 1 gameplay begins, then auto-dismiss.
+    LaunchedEffect(currentScreen, currentStageId) {
+        if (currentScreen == GameScreenState.GAMEPLAY && currentStageId == 1) {
+            showFirstRunHint = true
+            kotlinx.coroutines.delay(7000)
+            showFirstRunHint = false
+        } else {
+            showFirstRunHint = false
+        }
     }
 
     LaunchedEffect(isInPip) {
@@ -245,6 +262,25 @@ fun ArmadilloEscapeScreen(
             },
             onArmadilloSpawned = {
                 soundManager.playNewArmadilloSpawned()
+            },
+            onComboMilestone = { combo ->
+                haptics.appleEat()
+                soundManager.playComboMilestone(combo)
+            },
+            onDiamondCollected = {
+                haptics.powerActivated()
+                soundManager.playDiamond()
+            },
+            onMagnetCollected = {
+                haptics.powerActivated()
+                soundManager.playMagnet()
+            },
+            onRainbowCollected = {
+                haptics.powerActivated()
+                soundManager.playRainbow()
+            },
+            onRareFruitSpawned = {
+                soundManager.playRareSpawn()
             }
         ).apply {
             onStageCompleted = { stage, score, fruits, lost, time ->
@@ -525,6 +561,35 @@ fun ArmadilloEscapeScreen(
                 particles = gameEngine.particles,
                 boardCenter = tableCenter
             )
+
+            // 5b. Rare power-up beacon: pulsing ring + bobbing chevron pointing down at it
+            val rarePos = gameEngine.activeRareFruitPos
+            if (rarePos != null) {
+                val bx = tableCenter.x + rarePos.x
+                val by = tableCenter.y + rarePos.y
+                val pulse = (kotlin.math.sin(tick * 0.2f) * 0.5f + 0.5f)
+                drawCircle(
+                    color = Color(0xFFFFEA00).copy(alpha = 0.25f + 0.35f * pulse),
+                    radius = 30f + 10f * pulse,
+                    center = Offset(bx, by),
+                    style = Stroke(width = 2.5f)
+                )
+                val chevY = by - 40f - 6f * pulse
+                val chevron = Path().apply {
+                    moveTo(bx - 8f, chevY)
+                    lineTo(bx, chevY + 9f)
+                    lineTo(bx + 8f, chevY)
+                }
+                drawPath(chevron, color = Color(0xFFFFEA00).copy(alpha = 0.85f), style = Stroke(width = 3f))
+            }
+
+            // 6. Draw floating "+N" / combo score labels
+            TableRenderer.drawFloatingTexts(
+                scope = this,
+                texts = gameEngine.floatingTexts,
+                boardCenter = tableCenter,
+                measurer = textMeasurer
+            )
         }
 
         if (isInPip) {
@@ -771,6 +836,48 @@ fun ArmadilloEscapeScreen(
                     .align(Alignment.CenterEnd)
                     .padding(end = 88.dp)
             )
+
+            // Combo indicator (only while a chain is active) — centered just under the HUD row
+            val comboMult = gameEngine.comboMultiplier()
+            if (comboMult >= 2) {
+                Surface(
+                    color = Color(0xE6311B06),
+                    shape = RoundedCornerShape(12.dp),
+                    border = androidx.compose.foundation.BorderStroke(1.5.dp, Color(0xFFFFEA00)),
+                    modifier = Modifier
+                        .align(Alignment.TopCenter)
+                        .padding(top = 50.dp)
+                ) {
+                    Text(
+                        text = "🔥 COMBO x$comboMult",
+                        color = Color(0xFFFFEA00),
+                        fontSize = 13.sp,
+                        fontWeight = FontWeight.ExtraBold,
+                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp)
+                    )
+                }
+            }
+
+            // First-run teaching hint on Round 1 (fades out after a few seconds)
+            if (gameEngine.currentStage.id == 1 && showFirstRunHint) {
+                Surface(
+                    color = Color(0xCC1B1206),
+                    shape = RoundedCornerShape(12.dp),
+                    border = androidx.compose.foundation.BorderStroke(1.dp, Color(0x8081C784)),
+                    modifier = Modifier
+                        .align(Alignment.BottomCenter)
+                        .padding(bottom = 92.dp)
+                ) {
+                    Text(
+                        text = "Drag to move • Grab 🍎 • Chain bites for COMBOS • Catch glowing ⚡💎🧲🌈 power fruit!",
+                        color = Color(0xFFFFE0B2),
+                        fontSize = 11.5.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        textAlign = TextAlign.Center,
+                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp)
+                    )
+                }
+            }
         }
 
 

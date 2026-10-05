@@ -12,6 +12,11 @@ import androidx.compose.ui.graphics.drawscope.Fill
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.drawscope.rotate
 import androidx.compose.ui.graphics.drawscope.withTransform
+import androidx.compose.ui.text.TextMeasurer
+import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.drawText
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.sp
 import kotlin.math.PI
 import kotlin.math.cos
 import kotlin.math.sin
@@ -632,9 +637,47 @@ object TableRenderer {
             }
         }
 
+        // MAGNET active: orbiting magnetic particles + faint attraction field ring
+        if (armadillo.magnetTimer > 0f) {
+            scope.drawCircle(
+                color = Color(0x33E040FB),
+                radius = 46f,
+                center = Offset(cx, cy),
+                style = Stroke(width = 3f)
+            )
+            for (k in 0 until 6) {
+                val a = armadillo.auraPhase * 2f + k * (PI.toFloat() / 3f)
+                val rr = 40f + sin(armadillo.auraPhase * 3f + k) * 4f
+                scope.drawCircle(
+                    color = if (k % 2 == 0) Color(0xFFE040FB) else Color(0xFFEA80FC),
+                    radius = 3f,
+                    center = Offset(cx + cos(a) * rr, cy + sin(a) * rr)
+                )
+            }
+        }
+
+        // RAINBOW active: shifting multicolor score-multiplier aura
+        if (armadillo.rainbowTimer > 0f) {
+            val cols = listOf(
+                Color(0xFFFF1744), Color(0xFFFF9100), Color(0xFFFFEA00),
+                Color(0xFF00E676), Color(0xFF00B0FF), Color(0xFFD500F9)
+            )
+            val idx = ((armadillo.auraPhase * 2f).toInt() % cols.size + cols.size) % cols.size
+            scope.drawCircle(
+                color = cols[idx].copy(alpha = 0.5f),
+                radius = 44f,
+                center = Offset(cx, cy),
+                style = Stroke(width = 4f)
+            )
+        }
+
+        // Eat-bounce squash-and-stretch pop (brief scale-up right after a bite)
+        val bounceScale = 1f + armadillo.eatBounceTimer.coerceIn(0f, 0.3f) * 0.5f
+        val drawScale = scale * bounceScale
+
         scope.withTransform({
             translate(left = cx, top = cy)
-            scale(scaleX = scale, scaleY = scale, pivot = Offset.Zero)
+            scale(scaleX = drawScale, scaleY = drawScale, pivot = Offset.Zero)
             rotate(degrees = headingDeg, pivot = Offset.Zero)
         }) {
             // 1. Soft Oval Drop Shadow on the Table
@@ -1265,7 +1308,151 @@ object TableRenderer {
                         center = Offset(ax - 6f, curY - 7f)
                     )
                 }
+                FruitType.DIAMOND -> {
+                    val pop = if (apple.maxLife > 0f) (0.45f + 0.55f * apple.spawnPop) else 1f
+                    val blink = rareBlink(apple)
+                    val r = (17f + sin(apple.sparkleTimer * 9f) * 2f) * pop
+
+                    // Cyan halo
+                    scope.drawCircle(
+                        brush = Brush.radialGradient(
+                            colors = listOf(Color(0x9980DEEA), Color(0x0000E5FF)),
+                            center = Offset(ax, curY),
+                            radius = r + 16f
+                        ),
+                        radius = r + 16f,
+                        center = Offset(ax, curY),
+                        alpha = blink
+                    )
+                    // Faceted gem body (rhombus)
+                    val gem = Path().apply {
+                        moveTo(ax, curY - r)
+                        lineTo(ax + r * 0.8f, curY - r * 0.2f)
+                        lineTo(ax, curY + r)
+                        lineTo(ax - r * 0.8f, curY - r * 0.2f)
+                        close()
+                    }
+                    scope.drawPath(
+                        gem,
+                        brush = Brush.linearGradient(
+                            colors = listOf(Color(0xFFE0F7FA), Color(0xFF00E5FF), Color(0xFF00838F)),
+                            start = Offset(ax - r, curY - r),
+                            end = Offset(ax + r, curY + r)
+                        ),
+                        alpha = blink
+                    )
+                    // Facet lines + sparkle
+                    scope.drawLine(Color(0xCCFFFFFF), Offset(ax, curY - r), Offset(ax, curY + r), strokeWidth = 1.2f)
+                    scope.drawLine(Color(0x88FFFFFF), Offset(ax - r * 0.8f, curY - r * 0.2f), Offset(ax + r * 0.8f, curY - r * 0.2f), strokeWidth = 1.2f)
+                    scope.drawCircle(Color.White.copy(alpha = 0.9f * blink), radius = 2.6f, center = Offset(ax - r * 0.25f, curY - r * 0.35f))
+                }
+                FruitType.MAGNET -> {
+                    val pop = if (apple.maxLife > 0f) (0.45f + 0.55f * apple.spawnPop) else 1f
+                    val blink = rareBlink(apple)
+                    val r = 16f * pop
+                    val stroke = r * 0.46f
+
+                    // Purple glow
+                    scope.drawCircle(
+                        brush = Brush.radialGradient(
+                            colors = listOf(Color(0x99E040FB), Color(0x00D500F9)),
+                            center = Offset(ax, curY),
+                            radius = r + 16f
+                        ),
+                        radius = r + 16f,
+                        center = Offset(ax, curY),
+                        alpha = blink
+                    )
+                    // Horseshoe magnet: top U-bend + two prongs with red/blue tips
+                    val bendR = r * 0.72f
+                    val topY = curY - r * 0.15f
+                    val prongLen = r * 0.95f
+                    scope.drawArc(
+                        color = Color(0xFFBDBDBD),
+                        startAngle = 180f,
+                        sweepAngle = 180f,
+                        useCenter = false,
+                        topLeft = Offset(ax - bendR, topY - bendR),
+                        size = Size(bendR * 2f, bendR * 2f),
+                        style = Stroke(width = stroke, cap = StrokeCap.Round)
+                    )
+                    scope.drawLine(Color(0xFFBDBDBD), Offset(ax - bendR, topY), Offset(ax - bendR, topY + prongLen), strokeWidth = stroke, cap = StrokeCap.Round)
+                    scope.drawLine(Color(0xFFBDBDBD), Offset(ax + bendR, topY), Offset(ax + bendR, topY + prongLen), strokeWidth = stroke, cap = StrokeCap.Round)
+                    scope.drawLine(Color(0xFFD32F2F), Offset(ax - bendR, topY + prongLen - stroke * 0.6f), Offset(ax - bendR, topY + prongLen), strokeWidth = stroke, cap = StrokeCap.Round)
+                    scope.drawLine(Color(0xFF2962FF), Offset(ax + bendR, topY + prongLen - stroke * 0.6f), Offset(ax + bendR, topY + prongLen), strokeWidth = stroke, cap = StrokeCap.Round)
+                }
+                FruitType.RAINBOW -> {
+                    val pop = if (apple.maxLife > 0f) (0.45f + 0.55f * apple.spawnPop) else 1f
+                    val blink = rareBlink(apple)
+                    val r = (17f + sin(apple.sparkleTimer * 8f) * 2f) * pop
+
+                    // White halo
+                    scope.drawCircle(
+                        brush = Brush.radialGradient(
+                            colors = listOf(Color(0x99FFFFFF), Color(0x00FFFFFF)),
+                            center = Offset(ax, curY),
+                            radius = r + 18f
+                        ),
+                        radius = r + 18f,
+                        center = Offset(ax, curY),
+                        alpha = blink
+                    )
+                    // Concentric rainbow rings
+                    val cols = listOf(
+                        Color(0xFFFF1744), Color(0xFFFF9100), Color(0xFFFFEA00),
+                        Color(0xFF00E676), Color(0xFF00B0FF), Color(0xFFD500F9)
+                    )
+                    for (idx in cols.indices) {
+                        scope.drawCircle(
+                            color = cols[idx].copy(alpha = 0.9f * blink),
+                            radius = r - idx * (r / cols.size),
+                            center = Offset(ax, curY),
+                            style = Stroke(width = 2.4f)
+                        )
+                    }
+                    scope.drawCircle(Color.White.copy(alpha = blink), radius = r * 0.28f, center = Offset(ax, curY))
+                }
             }
+        }
+    }
+
+    /** Alpha factor that makes a rare timed fruit blink faster as its lifetime runs out. */
+    private fun rareBlink(apple: AppleItem): Float {
+        if (apple.maxLife <= 0f) return 1f
+        val remaining = apple.maxLife - apple.lifeTimer
+        return if (remaining < 2.5f) (0.45f + 0.55f * ((sin(apple.lifeTimer * 16f) + 1f) / 2f)) else 1f
+    }
+
+    /** Draws the floating "+N" / combo labels rising from eaten fruit (board space → screen). */
+    fun drawFloatingTexts(
+        scope: DrawScope,
+        texts: List<FloatingText>,
+        boardCenter: Offset,
+        measurer: TextMeasurer
+    ) {
+        for (f in texts) {
+            val alpha = (1f - f.life / f.maxLife).coerceIn(0f, 1f)
+            val x = boardCenter.x + f.pos.x
+            val y = boardCenter.y + f.pos.y
+            val layout = measurer.measure(
+                text = f.text,
+                style = TextStyle(
+                    color = f.color.copy(alpha = alpha),
+                    fontSize = f.sizeSp.sp,
+                    fontWeight = FontWeight.ExtraBold
+                )
+            )
+            // Soft dark outline for legibility over any background
+            val shadow = measurer.measure(
+                text = f.text,
+                style = TextStyle(
+                    color = Color.Black.copy(alpha = alpha * 0.55f),
+                    fontSize = f.sizeSp.sp,
+                    fontWeight = FontWeight.ExtraBold
+                )
+            )
+            scope.drawText(shadow, topLeft = Offset(x - layout.size.width / 2f + 1.5f, y - layout.size.height / 2f + 1.5f))
+            scope.drawText(layout, topLeft = Offset(x - layout.size.width / 2f, y - layout.size.height / 2f))
         }
     }
 

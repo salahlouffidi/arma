@@ -44,7 +44,11 @@ data class ArmadilloState(
     val powerTimer: Float = 0f,
     val maxPowerDuration: Float = 10f,
     val powerChancesRemaining: Int = 0,
-    val auraPhase: Float = 0f
+    val auraPhase: Float = 0f,
+    // --- juice / power-up visual state (additive; all default to inert) ---
+    val eatBounceTimer: Float = 0f,   // short squash-and-stretch pop when a fruit is eaten
+    val magnetTimer: Float = 0f,      // >0 while MAGNET power pulls nearby fruit in
+    val rainbowTimer: Float = 0f      // >0 while RAINBOW score-multiplier aura is active
 )
 
 data class SnakeState(
@@ -63,8 +67,21 @@ data class SnakeState(
 enum class FruitType {
     REGULAR_APPLE,
     ESCAPE_GOLDEN,
-    ESCAPE_STAR_POWER // Special temporary fruit that grants the 7araka ability
+    ESCAPE_STAR_POWER, // Special temporary fruit that grants the 7araka speed overdrive
+    DIAMOND,           // Rare: large score bonus with a lavish collection burst
+    MAGNET,            // Rare: briefly pulls nearby regular fruit toward the armadillo
+    RAINBOW            // Ultra-rare: activates a temporary score multiplier
 }
+
+/**
+ * True for the rare power-up fruits. Keeps spawn/collision logic readable and lets the
+ * renderer give these far stronger visual hierarchy than ordinary apples.
+ */
+fun FruitType.isSpecial(): Boolean =
+    this == FruitType.ESCAPE_STAR_POWER ||
+    this == FruitType.DIAMOND ||
+    this == FruitType.MAGNET ||
+    this == FruitType.RAINBOW
 
 data class AppleItem(
     val id: Int,
@@ -81,7 +98,26 @@ data class AppleItem(
     val isSpecialEventFruit: Boolean = false,
     val escapeSpeed: Float = 0f,
     val escapeAngle: Float = 0f,
-    val sparkleTimer: Float = 0f
+    val sparkleTimer: Float = 0f,
+    // --- rare power-up extras (additive; defaults keep ordinary apples unchanged) ---
+    val points: Int = 1,              // score awarded on pickup (before combo / multiplier)
+    val spawnPop: Float = 0f,         // 0..1 grow-in animation when a rare fruit appears
+    val lifeTimer: Float = 0f,        // counts up while a timed rare fruit is on the table
+    val maxLife: Float = 0f           // >0 means this fruit expires after maxLife seconds
+)
+
+/**
+ * Short-lived "+N" / combo label that floats up from an eaten fruit and fades out.
+ * Positions are in board space (same frame as apples / armadillo), mapped to screen at draw time.
+ */
+data class FloatingText(
+    val text: String,
+    val pos: Vector2,
+    val vel: Vector2 = Vector2(0f, -46f),
+    val color: Color = Color(0xFFFFD54F),
+    val life: Float = 0f,
+    val maxLife: Float = 0.9f,
+    val sizeSp: Float = 16f
 )
 
 data class Particle(
