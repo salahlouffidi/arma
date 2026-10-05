@@ -544,6 +544,58 @@ class SoundManager(private val context: Context) {
         playPcmSfx(samples)
     }
 
+    // 20. 🛡 shield collected / ready: bright resonant "energy bubble" ring
+    fun playShield() {
+        val length = (sampleRate * 0.34).toInt()
+        val samples = ShortArray(length)
+        var p1 = 0.0
+        var p2 = 0.0
+        for (i in 0 until length) {
+            val p = i.toDouble() / length
+            p1 += (2.0 * PI * (660.0 + p * 220.0)) / sampleRate
+            p2 += (2.0 * PI * (990.0 + p * 330.0)) / sampleRate
+            val env = sin(p * PI) * (1.0 - p * 0.4)
+            val v = (sin(p1) + 0.45 * sin(p2)) * env
+            samples[i] = (v * 26000).toInt().toShort()
+        }
+        playPcmSfx(samples)
+    }
+
+    // 21. ❄ freeze: descending crystalline shimmer
+    fun playFreeze() {
+        val length = (sampleRate * 0.5).toInt()
+        val samples = ShortArray(length)
+        var phase = 0.0
+        for (i in 0 until length) {
+            val p = i.toDouble() / length
+            val freq = 1760.0 - p * 1100.0
+            phase += (2.0 * PI * freq) / sampleRate
+            val shimmer = 0.6 + 0.4 * sin(2.0 * PI * 30.0 * p)
+            val env = exp(-p * 3.2)
+            val v = (sin(phase) + 0.25 * sin(phase * 2.5)) * shimmer * env
+            samples[i] = (v * 26000).toInt().toShort()
+        }
+        playPcmSfx(samples)
+    }
+
+    // 22. 👑 golden fruit: rich rising major fanfare
+    fun playGolden() {
+        val length = (sampleRate * 0.55).toInt()
+        val samples = ShortArray(length)
+        var phase = 0.0
+        val notes = doubleArrayOf(783.99, 987.77, 1174.66, 1567.98)
+        val noteLen = length / notes.size
+        for (i in 0 until length) {
+            val idx = (i / noteLen).coerceIn(0, notes.size - 1)
+            val subP = (i % noteLen).toDouble() / noteLen
+            phase += (2.0 * PI * notes[idx]) / sampleRate
+            val env = exp(-subP * 2.8)
+            val v = (sin(phase) + 0.35 * sin(2.0 * phase) + 0.15 * sin(3.0 * phase)) * env
+            samples[i] = (v * 28000).toInt().toShort()
+        }
+        playPcmSfx(samples)
+    }
+
     companion object {
         private const val KEY_SOUND_ENABLED = "sound_master_enabled"
         private const val KEY_MUSIC_VOL = "music_volume"

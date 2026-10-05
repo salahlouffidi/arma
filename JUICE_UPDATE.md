@@ -106,3 +106,47 @@ adb install -r app/build/outputs/apk/debug/app-debug.apk
 app background during an active effect, round completion, game over, restart, saved progression, and
 rewarded/interstitial ads. Tuning knobs (combo window, durations, spawn cadence, point values) are
 constants at the bottom of `GameEngine.kt`.
+
+---
+
+## Pass 3 — Console-style redesign
+
+Original console-inspired presentation (no Sony assets, logos, icons, fonts or sounds). Gameplay,
+16 rounds, progression/locks, save system, scoring, snake AI, controls, collision, combos, specials,
+AdMob, package name and Gradle/production config are unchanged.
+
+**New files**
+- `game/WorldRenderer.kt` — procedural full-screen worlds per theme (sky, sun/moon, 3 parallax
+  silhouette layers, themed particles, vignette, arena decor). Shared by menus and gameplay.
+- `ui/ConsoleKit.kt` — palette, living `WorldBackdrop` (crossfades on selection), focus menu items,
+  glass panels, difficulty meter, power chips.
+- `ui/ConsoleHomeScreen.kt` — cinematic home: live world, hero armadillo + distant snake, ARMASNAKE
+  title, dominant PLAY, ROUNDS / HOW TO PLAY / SETTINGS / VERSUS with spring focus.
+- `ui/RoundLibraryScreen.kt` — perspective carousel (ROUND xx/16, name, world art, difficulty,
+  target, best, COMPLETE/AVAILABLE/LOCKED), swipe + tap, ALL/SOLO/TWIN filter, launch surge.
+- `ui/GameplayOverlays.kt` — minimal HUD, power chips, rare-fruit toast ("RARE FRUIT DETECTED"),
+  ≤2.4 s cinematic round intro, Round Complete (count-up, best combo, NEW WORLD UNLOCKED card,
+  CONTINUE/REPLAY/ROUND SELECT), Game Over (RETRY/WATCH AD/ROUND SELECT/HOME).
+
+**Gameplay presentation**
+- 12 procedural normal fruits; specials drawn 1.3× with aura.
+- New specials: **Shield** (blocks one bite), **Freeze** (snakes slowed 5 s), **Golden** (+25).
+  Ghost / Fruit Rain intentionally skipped to keep balance simple.
+- Camera zoom pulse on combo milestones, celebration zoom, danger edge glow, freeze tint, parallax.
+- Screen transitions crossfade; Round Complete/Game Over keep particles animating.
+- Round names refreshed (Emerald Garden … Colosseum of Kings).
+
+**Verification (honest status)**
+- All changed Kotlin was **type-checked with the real Kotlin compiler (2.0.21)** against hand-written
+  Compose/Android API stubs — 0 errors. This catches syntax, types, missing imports and
+  non-exhaustive `when`s.
+- **Not built or run on Android.** This environment cannot reach Google Maven / Maven Central, so
+  Gradle/AGP and the Android SDK are unavailable. Build and device-test in Android Studio:
+
+```bash
+./gradlew :app:assembleDebug
+adb install -r app/build/outputs/apk/debug/app-debug.apk
+```
+
+**Please check on device:** frame rate on a low-end phone, carousel swipe feel, small-screen layout
+of Round Complete / Game Over, locked-round behaviour, unlock card, shield/freeze/golden, ads.

@@ -25,7 +25,11 @@ class GameEngine(
     var onDiamondCollected: (() -> Unit)? = null,
     var onMagnetCollected: (() -> Unit)? = null,
     var onRainbowCollected: (() -> Unit)? = null,
-    var onRareFruitSpawned: (() -> Unit)? = null
+    var onRareFruitSpawned: (() -> Unit)? = null,
+    var onShieldCollected: (() -> Unit)? = null,
+    var onFreezeCollected: (() -> Unit)? = null,
+    var onGoldenCollected: (() -> Unit)? = null,
+    var onShieldBlocked: (() -> Unit)? = null
 ) {
     // Board playable dimensions (centered at 0,0)
     var boardHalfWidth: Float = 440f
@@ -102,6 +106,24 @@ class GameEngine(
     var worldPulse: Float = 0f
         private set
     var worldPulseColor: Color = Color(0xFFFFD54F)
+        private set
+
+    // Camera zoom impulse (0..~0.04) — small "push-in" on combo milestones and rare powers.
+    var cameraZoomPulse: Float = 0f
+        private set
+    // 0..1 proximity of the nearest snake head to an armadillo (drives the red screen-edge cue).
+    var dangerLevel: Float = 0f
+        private set
+    // FREEZE power: global snake slow-down countdown.
+    var freezeTimer: Float = 0f
+        private set
+    // Rare-fruit "event" notification (console-style toast + brief environment dim).
+    var rareAlertTimer: Float = 0f
+        private set
+    var rareAlertType: FruitType? = null
+        private set
+    // Best combo multiplier reached this round (shown on the Round Complete screen).
+    var bestComboMultiplier: Int = 1
         private set
 
     private fun triggerWorldReaction(shake: Float, pulse: Float, color: Color) {
@@ -304,6 +326,12 @@ class GameEngine(
         roundIntroTimer = ROUND_INTRO_DURATION
         cameraShake = 0f
         worldPulse = 0f
+        cameraZoomPulse = 0f
+        dangerLevel = 0f
+        freezeTimer = 0f
+        rareAlertTimer = 0f
+        rareAlertType = null
+        bestComboMultiplier = 1
 
         if (config.isSolo) {
             if (isDual) {
@@ -533,6 +561,10 @@ class GameEngine(
         if (roundIntroTimer > 0f) roundIntroTimer = (roundIntroTimer - clampedDt).coerceAtLeast(0f)
         if (cameraShake > 0f) cameraShake = (cameraShake - clampedDt * 28f).coerceAtLeast(0f)
         if (worldPulse > 0f) worldPulse = (worldPulse - clampedDt * 1.6f).coerceAtLeast(0f)
+        if (cameraZoomPulse > 0f) cameraZoomPulse = (cameraZoomPulse - clampedDt * 0.09f).coerceAtLeast(0f)
+        if (freezeTimer > 0f) freezeTimer = (freezeTimer - clampedDt).coerceAtLeast(0f)
+        if (rareAlertTimer > 0f) rareAlertTimer = (rareAlertTimer - clampedDt).coerceAtLeast(0f)
+        dangerLevel = computeDangerLevel()
 
         updateObstacles(clampedDt)
         updateSnakes(clampedDt, snake1InputX, snake1InputY, snake2InputX, snake2InputY)
@@ -755,11 +787,13 @@ class GameEngine(
         val newEatBounce = (armadillo.eatBounceTimer - dt).coerceAtLeast(0f)
         val newMagnet = (armadillo.magnetTimer - dt).coerceAtLeast(0f)
         val newRainbow = (armadillo.rainbowTimer - dt).coerceAtLeast(0f)
+        val newHit = (armadillo.hitTimer - dt).coerceAtLeast(0f)
 
         // Spawn golden speed trail / sparks while 7araka power is active
         if (powerActive && currentSpeed > 30f) {
             spawnPowerTrail(Vector2(newPosX, newPosY), armadillo.headingAngle)
         }
+        spawnMovementTrails(Vector2(newPosX, newPosY), armadillo.headingAngle, currentSpeed)
 
         armadillo = armadillo.copy(
             pos = Vector2(newPosX, newPosY),
@@ -775,7 +809,8 @@ class GameEngine(
             auraPhase = newAuraPhase,
             eatBounceTimer = newEatBounce,
             magnetTimer = newMagnet,
-            rainbowTimer = newRainbow
+            rainbowTimer = newRainbow,
+            hitTimer = newHit
         )
     }
 
@@ -925,10 +960,12 @@ class GameEngine(
         val newEatBounce = (a2.eatBounceTimer - dt).coerceAtLeast(0f)
         val newMagnet = (a2.magnetTimer - dt).coerceAtLeast(0f)
         val newRainbow = (a2.rainbowTimer - dt).coerceAtLeast(0f)
+        val newHit = (a2.hitTimer - dt).coerceAtLeast(0f)
 
         if (powerActive && currentSpeed > 30f) {
             spawnPowerTrail(Vector2(newPosX, newPosY), a2.headingAngle)
         }
+        spawnMovementTrails(Vector2(newPosX, newPosY), a2.headingAngle, currentSpeed)
 
         armadillo2 = a2.copy(
             pos = Vector2(newPosX, newPosY),
@@ -944,7 +981,8 @@ class GameEngine(
             auraPhase = newAuraPhase,
             eatBounceTimer = newEatBounce,
             magnetTimer = newMagnet,
-            rainbowTimer = newRainbow
+            rainbowTimer = newRainbow,
+            hitTimer = newHit
         )
     }
 
@@ -1043,7 +1081,8 @@ class GameEngine(
 
             // Advance head with slithering motion
             val forwardDir = Vector2(cos(newHeadAngle), sin(newHeadAngle))
-            val newHeadPos = curSnake.headPos + forwardDir * (targetSpeed * dt)
+            val freezeMul = if (freezeTimer > 0f) FREEZE_SNAKE_SPEED else 1f
+            val newHeadPos = curSnake.headPos + forwardDir * (targetSpeed * freezeMul * dt)
 
             // Boundary constraint for snake head
             val sBoundX = boardHalfWidth - 35f
@@ -1275,17 +1314,21 @@ class GameEngine(
 
     private fun spawnRareSpecialFruit() {
         // Controlled rarity: diamonds are the "common rare", magnets less so, rainbow the rarest.
+        // Weighted rarity table: diamond is the "common rare", golden the rarest.
         val r = Random.nextFloat()
         val type = when {
-            r < 0.15f -> FruitType.RAINBOW
-            r < 0.50f -> FruitType.MAGNET
-            else -> FruitType.DIAMOND
+            r < 0.30f -> FruitType.DIAMOND
+            r < 0.52f -> FruitType.MAGNET
+            r < 0.70f -> FruitType.SHIELD
+            r < 0.85f -> FruitType.FREEZE
+            r < 0.94f -> FruitType.RAINBOW
+            else -> FruitType.GOLDEN
         }
         val pts = when (type) {
             FruitType.DIAMOND -> 15
-            FruitType.MAGNET -> 3
+            FruitType.GOLDEN -> 25
             FruitType.RAINBOW -> 5
-            else -> 1
+            else -> 3
         }
         val pos = getRandomSafeApplePos()
         apples.add(
@@ -1302,13 +1345,10 @@ class GameEngine(
         activeRareFruitPos = pos
         spawnEventDropPuff(pos)
         onRareFruitSpawned?.invoke()
-        val label = when (type) {
-            FruitType.DIAMOND -> "💎 DIAMOND DETECTED! GO GET IT!"
-            FruitType.MAGNET -> "🧲 MAGNET FRUIT! GO GET IT!"
-            FruitType.RAINBOW -> "🌈 RAINBOW FRUIT! GO GET IT!"
-            else -> "✨ SPECIAL FOOD DETECTED!"
-        }
-        showBanner(label)
+        // Console-style event notification (the HUD draws it from these fields).
+        rareAlertType = type
+        rareAlertTimer = RARE_ALERT_DURATION
+        triggerWorldReaction(0f, 0.45f, Color(0xFFFFEA00))
     }
 
     private fun updateParticles(dt: Float) {
@@ -1430,7 +1470,10 @@ class GameEngine(
                             spawnStandardApples(3)
                         }
                     } else {
-                        apples[idx] = eaten.copy(pos = getRandomSafeApplePos())
+                        apples[idx] = eaten.copy(
+                            pos = getRandomSafeApplePos(),
+                            variety = if (eaten.fruitType == FruitType.REGULAR_APPLE) Random.nextInt(FRUIT_VARIETY_COUNT) else eaten.variety
+                        )
                     }
                 }
             }
@@ -1443,7 +1486,22 @@ class GameEngine(
                 val curSnake = snakes[sIdx]
                 val distToHead = armadillo.pos.distance(curSnake.headPos)
                 if (distToHead < catchRadius) {
-                    if (armadillo.isPowerActive) {
+                    if (armadillo.shieldCharges > 0) {
+                        // SHIELD absorbs the bite completely: no score loss, no life lost.
+                        spawnShieldBurst(armadillo.pos)
+                        onShieldBlocked?.invoke()
+                        triggerWorldReaction(5f, 0.7f, Color(0xFF40C4FF))
+                        armadillo = armadillo.copy(shieldCharges = 0, invulnerableTimer = 1.6f, hitTimer = 0.35f)
+                        showBanner("🛡 SHIELD BLOCKED THE BITE!")
+                        val pushDir = (curSnake.headPos - armadillo.pos).normalized()
+                        val recoilSnake = curSnake.copy(
+                            headPos = curSnake.headPos + pushDir * 45f,
+                            isStriking = true,
+                            strikeTimer = 0f
+                        )
+                        snakes[sIdx] = recoilSnake
+                        if (sIdx == 0) snake = recoilSnake
+                    } else if (armadillo.isPowerActive) {
                         val newScore = maxOf(0, stats.score - 1)
                         stats = stats.copy(score = newScore)
                         onScoreChanged?.invoke(newScore)
@@ -1456,7 +1514,8 @@ class GameEngine(
                             isPowerActive = false,
                             powerTimer = 0f,
                             powerChancesRemaining = 0,
-                            invulnerableTimer = 2.0f
+                            invulnerableTimer = 2.0f,
+                            hitTimer = 0.35f
                         )
                         showBanner("POWER LOST −1")
 
@@ -1518,7 +1577,22 @@ class GameEngine(
                 val curSnake = snakes[sIdx]
                 val distToHead = curA2.pos.distance(curSnake.headPos)
                 if (distToHead < catchRadius) {
-                    if (curA2.isPowerActive) {
+                    if (curA2.shieldCharges > 0) {
+                        // SHIELD absorbs the bite completely: no score loss, no life lost.
+                        spawnShieldBurst(curA2.pos)
+                        onShieldBlocked?.invoke()
+                        triggerWorldReaction(5f, 0.7f, Color(0xFF40C4FF))
+                        armadillo2 = curA2.copy(shieldCharges = 0, invulnerableTimer = 1.6f, hitTimer = 0.35f)
+                        showBanner("🛡 BLUE SHIELD BLOCKED THE BITE!")
+                        val pushDir = (curSnake.headPos - curA2.pos).normalized()
+                        val recoilSnake = curSnake.copy(
+                            headPos = curSnake.headPos + pushDir * 45f,
+                            isStriking = true,
+                            strikeTimer = 0f
+                        )
+                        snakes[sIdx] = recoilSnake
+                        if (sIdx == 0) snake = recoilSnake
+                    } else if (curA2.isPowerActive) {
                         val newScore = maxOf(0, stats.score - 1)
                         stats = stats.copy(score = newScore)
                         onScoreChanged?.invoke(newScore)
@@ -1531,7 +1605,8 @@ class GameEngine(
                             isPowerActive = false,
                             powerTimer = 0f,
                             powerChancesRemaining = 0,
-                            invulnerableTimer = 2.0f
+                            invulnerableTimer = 2.0f,
+                            hitTimer = 0.35f
                         )
                         showBanner("BLUE ARMADILLO POWER LOST −1")
 
@@ -1645,7 +1720,8 @@ class GameEngine(
                 AppleItem(
                     id = nextAppleId++,
                     pos = getRandomSafeApplePos(),
-                    fruitType = FruitType.REGULAR_APPLE
+                    fruitType = FruitType.REGULAR_APPLE,
+                    variety = Random.nextInt(FRUIT_VARIETY_COUNT)
                 )
             )
         }
@@ -1959,7 +2035,7 @@ class GameEngine(
         }
     }
 
-    private enum class FruitEffect { NONE, SPEED, MAGNET, RAINBOW, DIAMOND }
+    private enum class FruitEffect { NONE, SPEED, MAGNET, RAINBOW, DIAMOND, SHIELD, FREEZE, GOLDEN }
 
     private fun fruitAccentColor(type: FruitType): Color = when (type) {
         FruitType.REGULAR_APPLE -> Color(0xFFFF8A80)
@@ -1968,6 +2044,9 @@ class GameEngine(
         FruitType.DIAMOND -> Color(0xFF80DEEA)
         FruitType.MAGNET -> Color(0xFFE040FB)
         FruitType.RAINBOW -> Color(0xFFFFFFFF)
+        FruitType.SHIELD -> Color(0xFF40C4FF)
+        FruitType.FREEZE -> Color(0xFFB3E5FC)
+        FruitType.GOLDEN -> Color(0xFFFFD700)
     }
 
     private fun spawnFloatingText(
@@ -2004,8 +2083,15 @@ class GameEngine(
         if (cm >= 2) {
             spawnFloatingText("x$cm COMBO", apple.pos + Vector2(0f, -20f), Color(0xFFFFEA00), sizeSp = 13f, riseSpeed = -34f)
         }
+        if (cm > bestComboMultiplier) bestComboMultiplier = cm
         if (comboCount == 2 || comboCount == 4 || comboCount == 6 || comboCount == 8) {
             onComboMilestone?.invoke(comboCount)
+            cameraZoomPulse = maxOf(cameraZoomPulse, if (comboCount >= 8) 0.025f else 0.012f)
+            if (comboCount >= 8) {
+                // x5: the arena answers with a short golden pulse.
+                triggerWorldReaction(2f, 0.7f, Color(0xFFFFC107))
+                spawnGoldBurst(apple.pos, 18)
+            }
         }
 
         return when (apple.fruitType) {
@@ -2013,7 +2099,17 @@ class GameEngine(
             FruitType.MAGNET -> { spawnMagnetBurst(apple.pos); onMagnetCollected?.invoke(); FruitEffect.MAGNET }
             FruitType.RAINBOW -> { scoreMultiplierTimer = RAINBOW_DURATION; spawnRainbowBurst(apple.pos); onRainbowCollected?.invoke(); FruitEffect.RAINBOW }
             FruitType.DIAMOND -> { spawnDiamondBurst(apple.pos); onDiamondCollected?.invoke(); FruitEffect.DIAMOND }
-            else -> { spawnAppleSparkles(apple.pos); FruitEffect.NONE }
+            FruitType.SHIELD -> { spawnShieldBurst(apple.pos); onShieldCollected?.invoke(); FruitEffect.SHIELD }
+            FruitType.FREEZE -> {
+                freezeTimer = FREEZE_DURATION
+                spawnFreezeWave(apple.pos); onFreezeCollected?.invoke(); FruitEffect.FREEZE
+            }
+            FruitType.GOLDEN -> { spawnGoldBurst(apple.pos, 34); onGoldenCollected?.invoke(); FruitEffect.GOLDEN }
+            else -> {
+                // Normal fruit: a small, restrained pop. Bigger pop once a combo is running.
+                if (cm >= 2) spawnAppleSparkles(apple.pos) else spawnEatPop(apple.pos)
+                FruitEffect.NONE
+            }
         }
     }
 
@@ -2021,6 +2117,7 @@ class GameEngine(
     private fun applyEffectToArmadillo(arm: ArmadilloState, effect: FruitEffect, isBlue: Boolean): ArmadilloState {
         return when (effect) {
             FruitEffect.SPEED -> {
+                cameraZoomPulse = maxOf(cameraZoomPulse, 0.03f)
                 triggerWorldReaction(6f, 1f, Color(0xFF00E5FF))
                 onPowerActivated?.invoke()
                 spawnPowerBurstParticles(arm.pos)
@@ -2028,21 +2125,140 @@ class GameEngine(
                 arm.copy(isPowerActive = true, powerTimer = 10f, powerChancesRemaining = 1, invulnerableTimer = 0.5f, eatBounceTimer = 0.24f)
             }
             FruitEffect.MAGNET -> {
+                cameraZoomPulse = maxOf(cameraZoomPulse, 0.03f)
                 triggerWorldReaction(3f, 0.7f, Color(0xFFE040FB))
                 showBanner(if (isBlue) "🧲 BLUE MAGNET ACTIVE!" else "🧲 MAGNET ACTIVE!")
                 arm.copy(magnetTimer = MAGNET_DURATION, eatBounceTimer = 0.24f)
             }
             FruitEffect.RAINBOW -> {
+                cameraZoomPulse = maxOf(cameraZoomPulse, 0.03f)
                 triggerWorldReaction(7f, 1f, Color(0xFFFFFFFF))
                 showBanner(if (isBlue) "🌈 BLUE RAINBOW x2!" else "🌈 RAINBOW x2 SCORE!")
                 arm.copy(rainbowTimer = RAINBOW_DURATION, eatBounceTimer = 0.24f)
             }
             FruitEffect.DIAMOND -> {
+                cameraZoomPulse = maxOf(cameraZoomPulse, 0.03f)
                 triggerWorldReaction(5f, 0.9f, Color(0xFF80DEEA))
                 showBanner("💎 DIAMOND BONUS!")
                 arm.copy(eatBounceTimer = 0.28f)
             }
+            FruitEffect.SHIELD -> {
+                triggerWorldReaction(3f, 0.8f, Color(0xFF40C4FF))
+                cameraZoomPulse = maxOf(cameraZoomPulse, 0.03f)
+                showBanner(if (isBlue) "🛡 BLUE SHIELD READY" else "🛡 SHIELD READY — BLOCKS ONE BITE")
+                arm.copy(shieldCharges = 1, eatBounceTimer = 0.24f)
+            }
+            FruitEffect.FREEZE -> {
+                triggerWorldReaction(4f, 1f, Color(0xFFB3E5FC))
+                cameraZoomPulse = maxOf(cameraZoomPulse, 0.03f)
+                showBanner("❄ SNAKES FROZEN")
+                arm.copy(eatBounceTimer = 0.24f)
+            }
+            FruitEffect.GOLDEN -> {
+                triggerWorldReaction(6f, 1f, Color(0xFFFFD700))
+                cameraZoomPulse = maxOf(cameraZoomPulse, 0.035f)
+                showBanner("👑 GOLDEN FRUIT!")
+                arm.copy(eatBounceTimer = 0.3f)
+            }
             FruitEffect.NONE -> arm.copy(eatBounceTimer = 0.16f)
+        }
+    }
+
+    /** Nearest snake-head distance to a live armadillo, mapped to a 0..1 danger cue. */
+    private fun computeDangerLevel(): Float {
+        var best = Float.MAX_VALUE
+        for (s in snakes) {
+            if (!armadillo.isEaten) best = minOf(best, s.headPos.distance(armadillo.pos))
+            val a2 = armadillo2
+            if (a2 != null && !a2.isEaten) best = minOf(best, s.headPos.distance(a2.pos))
+        }
+        if (best == Float.MAX_VALUE) return 0f
+        return ((DANGER_RADIUS - best) / (DANGER_RADIUS - 60f)).coerceIn(0f, 1f)
+    }
+
+    /**
+     * Presentation-only tick used while the simulation is frozen (round complete / game over):
+     * particles, floating labels and camera/world reactions keep settling, nothing else moves.
+     */
+    fun updateEffectsOnly(dt: Float) {
+        val d = dt.coerceIn(0.001f, 0.05f)
+        updateParticles(d)
+        updateFloatingTexts(d)
+        if (cameraShake > 0f) cameraShake = (cameraShake - d * 28f).coerceAtLeast(0f)
+        if (worldPulse > 0f) worldPulse = (worldPulse - d * 1.6f).coerceAtLeast(0f)
+        if (cameraZoomPulse > 0f) cameraZoomPulse = (cameraZoomPulse - d * 0.09f).coerceAtLeast(0f)
+        if (bannerTimer > 0f) {
+            bannerTimer -= d
+            if (bannerTimer <= 0f) bannerMessage = null
+        }
+        dangerLevel = (dangerLevel - d * 2f).coerceAtLeast(0f)
+    }
+
+    /** x5 combo golden trail + subtle ground dust at high speed (rate-limited, capped). */
+    private fun spawnMovementTrails(pos: Vector2, heading: Float, speed: Float) {
+        if (particles.size > MAX_PARTICLES - 20) return
+        if (comboMultiplier() >= 5 && speed > 30f && Random.nextFloat() < 0.5f) {
+            particles.add(
+                Particle(
+                    pos = pos - Vector2.fromAngle(heading, 18f),
+                    vel = Vector2.fromAngle(heading + 3.14f + (Random.nextFloat() - 0.5f) * 0.6f, Random.nextFloat() * 40f + 20f),
+                    color = if (Random.nextBoolean()) Color(0xFFFFD700) else Color(0xFFFFF59D),
+                    size = Random.nextFloat() * 5f + 3f,
+                    alpha = 0.9f,
+                    life = 0f,
+                    maxLife = 0.35f
+                )
+            )
+        }
+        if (speed > 380f && Random.nextFloat() < 0.25f) {
+            particles.add(
+                Particle(
+                    pos = pos - Vector2.fromAngle(heading, 22f) + Vector2((Random.nextFloat() - 0.5f) * 14f, (Random.nextFloat() - 0.5f) * 14f),
+                    vel = Vector2.fromAngle(heading + 3.14f, Random.nextFloat() * 30f + 10f),
+                    color = Color(0x99E0C9A6),
+                    size = Random.nextFloat() * 4f + 3f,
+                    alpha = 0.6f,
+                    life = 0f,
+                    maxLife = 0.4f
+                )
+            )
+        }
+    }
+
+    /** Restrained pop for an ordinary bite (fewer, smaller sparks than combo/rare pickups). */
+    private fun spawnEatPop(pos: Vector2) {
+        if (particles.size > MAX_PARTICLES) return
+        val colors = listOf(Color(0xFFFFD54F), Color(0xFFFF8A65), Color(0xFFFFFFFF))
+        for (i in 0 until 7) {
+            val angle = Random.nextFloat() * 6.28f
+            particles.add(Particle(pos, Vector2.fromAngle(angle, Random.nextFloat() * 110f + 50f), colors[Random.nextInt(colors.size)], Random.nextFloat() * 4f + 3f, 1f, 0f, Random.nextFloat() * 0.25f + 0.25f))
+        }
+    }
+
+    private fun spawnGoldBurst(pos: Vector2, count: Int) {
+        if (particles.size > MAX_PARTICLES) return
+        val colors = listOf(Color(0xFFFFD700), Color(0xFFFFF176), Color(0xFFFFB300), Color(0xFFFFFFFF))
+        for (i in 0 until count) {
+            val angle = Random.nextFloat() * 6.28f
+            particles.add(Particle(pos, Vector2.fromAngle(angle, Random.nextFloat() * 260f + 80f), colors[Random.nextInt(colors.size)], Random.nextFloat() * 8f + 4f, 1f, 0f, Random.nextFloat() * 0.6f + 0.45f))
+        }
+    }
+
+    private fun spawnShieldBurst(pos: Vector2) {
+        if (particles.size > MAX_PARTICLES) return
+        val colors = listOf(Color(0xFF40C4FF), Color(0xFF80D8FF), Color(0xFFFFFFFF))
+        for (i in 0 until 22) {
+            val angle = i * (6.28f / 22f)
+            particles.add(Particle(pos + Vector2.fromAngle(angle, 18f), Vector2.fromAngle(angle, 170f), colors[i % colors.size], 5f, 1f, 0f, 0.45f))
+        }
+    }
+
+    private fun spawnFreezeWave(pos: Vector2) {
+        if (particles.size > MAX_PARTICLES) return
+        val colors = listOf(Color(0xFFE1F5FE), Color(0xFFB3E5FC), Color(0xFFFFFFFF))
+        for (i in 0 until 28) {
+            val angle = i * (6.28f / 28f)
+            particles.add(Particle(pos, Vector2.fromAngle(angle, 320f), colors[i % colors.size], Random.nextFloat() * 5f + 4f, 1f, 0f, 0.7f))
         }
     }
 
@@ -2088,7 +2304,11 @@ class GameEngine(
         private const val COMBO_WINDOW = 2.2f
         const val RAINBOW_DURATION = 7f
         const val MAGNET_DURATION = 6f
-        const val ROUND_INTRO_DURATION = 2.6f
+        const val ROUND_INTRO_DURATION = 2.4f
+        const val FREEZE_DURATION = 5f
+        const val FREEZE_SNAKE_SPEED = 0.4f
+        const val RARE_ALERT_DURATION = 2.2f
+        private const val DANGER_RADIUS = 170f
         private const val FIRST_RARE_DELAY = 14f
         private const val RARE_RESPAWN_MIN = 13f
         private const val RARE_RESPAWN_JITTER = 10f

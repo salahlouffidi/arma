@@ -48,7 +48,9 @@ data class ArmadilloState(
     // --- juice / power-up visual state (additive; all default to inert) ---
     val eatBounceTimer: Float = 0f,   // short squash-and-stretch pop when a fruit is eaten
     val magnetTimer: Float = 0f,      // >0 while MAGNET power pulls nearby fruit in
-    val rainbowTimer: Float = 0f      // >0 while RAINBOW score-multiplier aura is active
+    val rainbowTimer: Float = 0f,     // >0 while RAINBOW score-multiplier aura is active
+    val shieldCharges: Int = 0,       // SHIELD power: absorbs one snake hit
+    val hitTimer: Float = 0f          // short hit-reaction flash after a blocked/absorbed hit
 )
 
 data class SnakeState(
@@ -70,7 +72,10 @@ enum class FruitType {
     ESCAPE_STAR_POWER, // Special temporary fruit that grants the 7araka speed overdrive
     DIAMOND,           // Rare: large score bonus with a lavish collection burst
     MAGNET,            // Rare: briefly pulls nearby regular fruit toward the armadillo
-    RAINBOW            // Ultra-rare: activates a temporary score multiplier
+    RAINBOW,           // Ultra-rare: activates a temporary score multiplier
+    SHIELD,            // Rare: energy bubble that absorbs one snake hit
+    FREEZE,            // Rare: ice wave that slows every snake for a few seconds
+    GOLDEN             // Ultra-rare: high-value golden fruit
 }
 
 /**
@@ -81,7 +86,38 @@ fun FruitType.isSpecial(): Boolean =
     this == FruitType.ESCAPE_STAR_POWER ||
     this == FruitType.DIAMOND ||
     this == FruitType.MAGNET ||
-    this == FruitType.RAINBOW
+    this == FruitType.RAINBOW ||
+    this == FruitType.SHIELD ||
+    this == FruitType.FREEZE ||
+    this == FruitType.GOLDEN
+
+/** Number of illustrated normal-fruit varieties (apple, orange, banana, ...). Same scoring for all. */
+const val FRUIT_VARIETY_COUNT = 12
+
+/** Short human label for a power-up fruit (used by the rare-fruit notification and HUD chips). */
+fun FruitType.powerLabel(): String = when (this) {
+    FruitType.ESCAPE_STAR_POWER -> "SPEED"
+    FruitType.DIAMOND -> "DIAMOND"
+    FruitType.MAGNET -> "MAGNET"
+    FruitType.RAINBOW -> "RAINBOW x2"
+    FruitType.SHIELD -> "SHIELD"
+    FruitType.FREEZE -> "FREEZE"
+    FruitType.GOLDEN -> "GOLDEN FRUIT"
+    FruitType.ESCAPE_GOLDEN -> "GOLDEN ESCAPE"
+    FruitType.REGULAR_APPLE -> "FRUIT"
+}
+
+fun FruitType.powerIcon(): String = when (this) {
+    FruitType.ESCAPE_STAR_POWER -> "⚡"
+    FruitType.DIAMOND -> "💎"
+    FruitType.MAGNET -> "🧲"
+    FruitType.RAINBOW -> "🌈"
+    FruitType.SHIELD -> "🛡"
+    FruitType.FREEZE -> "❄"
+    FruitType.GOLDEN -> "👑"
+    FruitType.ESCAPE_GOLDEN -> "✨"
+    FruitType.REGULAR_APPLE -> "🍎"
+}
 
 data class AppleItem(
     val id: Int,
@@ -103,7 +139,8 @@ data class AppleItem(
     val points: Int = 1,              // score awarded on pickup (before combo / multiplier)
     val spawnPop: Float = 0f,         // 0..1 grow-in animation when a rare fruit appears
     val lifeTimer: Float = 0f,        // counts up while a timed rare fruit is on the table
-    val maxLife: Float = 0f           // >0 means this fruit expires after maxLife seconds
+    val maxLife: Float = 0f,          // >0 means this fruit expires after maxLife seconds
+    val variety: Int = 0              // which illustrated normal fruit to draw (0 = apple)
 )
 
 /**
@@ -198,7 +235,7 @@ data class StageConfig(
             // =========================================================================
             StageConfig(
                 id = 1,
-                name = "Garden",
+                name = "Emerald Garden",
                 subtitle = "Lush Woodlands",
                 icon = "🌿",
                 theme = StageTheme.GARDEN,
@@ -214,7 +251,7 @@ data class StageConfig(
             ),
             StageConfig(
                 id = 2,
-                name = "Desert",
+                name = "Sunscorch Dunes",
                 subtitle = "Scorching Dunes",
                 icon = "🏜️",
                 theme = StageTheme.DESERT,
@@ -230,7 +267,7 @@ data class StageConfig(
             ),
             StageConfig(
                 id = 3,
-                name = "Jungle",
+                name = "Whispering Jungle",
                 subtitle = "Emerald Canopy",
                 icon = "🌴",
                 theme = StageTheme.JUNGLE,
@@ -246,7 +283,7 @@ data class StageConfig(
             ),
             StageConfig(
                 id = 4,
-                name = "Mountains",
+                name = "Sky Mountain",
                 subtitle = "Craggy Summits",
                 icon = "🏔️",
                 theme = StageTheme.MOUNTAINS,
@@ -263,7 +300,7 @@ data class StageConfig(
             ),
             StageConfig(
                 id = 5,
-                name = "Volcano",
+                name = "Volcano Ridge",
                 subtitle = "Molten Caldera",
                 icon = "🌋",
                 theme = StageTheme.VOLCANO,
@@ -279,7 +316,7 @@ data class StageConfig(
             ),
             StageConfig(
                 id = 6,
-                name = "Ice World",
+                name = "Frozen Peaks",
                 subtitle = "Glacial Tundra",
                 icon = "❄️",
                 theme = StageTheme.ICE,
@@ -295,7 +332,7 @@ data class StageConfig(
             ),
             StageConfig(
                 id = 7,
-                name = "Dark Temple",
+                name = "Ancient Temple",
                 subtitle = "Arcane Ruins",
                 icon = "🌑",
                 theme = StageTheme.DARK_TEMPLE,
@@ -334,7 +371,7 @@ data class StageConfig(
             // =========================================================================
             StageConfig(
                 id = 9,
-                name = "Extra Garden",
+                name = "Twin Gardens",
                 subtitle = "Dual Woodlands",
                 icon = "🌿🌿",
                 theme = StageTheme.GARDEN,
@@ -350,7 +387,7 @@ data class StageConfig(
             ),
             StageConfig(
                 id = 10,
-                name = "Extra Desert",
+                name = "Twin Dunes",
                 subtitle = "Twin Dunes",
                 icon = "🏜️🏜️",
                 theme = StageTheme.DESERT,
@@ -366,7 +403,7 @@ data class StageConfig(
             ),
             StageConfig(
                 id = 11,
-                name = "Extra Jungle",
+                name = "Twin Canopies",
                 subtitle = "Twin Canopies",
                 icon = "🌴🌴",
                 theme = StageTheme.JUNGLE,
@@ -382,7 +419,7 @@ data class StageConfig(
             ),
             StageConfig(
                 id = 12,
-                name = "Extra Mountains",
+                name = "Twin Summits",
                 subtitle = "Twin Summits",
                 icon = "🏔️🏔️",
                 theme = StageTheme.MOUNTAINS,
@@ -398,7 +435,7 @@ data class StageConfig(
             ),
             StageConfig(
                 id = 13,
-                name = "Extra Volcano",
+                name = "Twin Calderas",
                 subtitle = "Twin Calderas",
                 icon = "🌋🌋",
                 theme = StageTheme.VOLCANO,
@@ -413,7 +450,7 @@ data class StageConfig(
             ),
             StageConfig(
                 id = 14,
-                name = "Extra Ice World",
+                name = "Twin Glaciers",
                 subtitle = "Twin Glaciers",
                 icon = "❄️❄️",
                 theme = StageTheme.ICE,
@@ -428,7 +465,7 @@ data class StageConfig(
             ),
             StageConfig(
                 id = 15,
-                name = "Extra Dark Temple",
+                name = "Twin Sanctum",
                 subtitle = "Arcane Twin Sanctum",
                 icon = "🌑🌑",
                 theme = StageTheme.DARK_TEMPLE,
@@ -445,7 +482,7 @@ data class StageConfig(
             ),
             StageConfig(
                 id = 16,
-                name = "Extra Final Arena",
+                name = "Colosseum of Kings",
                 subtitle = "Twin Colosseum of Champions",
                 icon = "👑👑",
                 theme = StageTheme.FINAL_ARENA,
@@ -462,4 +499,28 @@ data class StageConfig(
             )
         )
     }
+}
+
+/** 1..5 difficulty rating derived from snake speed, snake count, allowed losses and dual control. */
+fun StageConfig.difficultyLevel(): Int {
+    val speedPart = ((baseSnakeSpeed - 90f) / 30f).coerceAtLeast(0f)
+    val snakesPart = (snakeCount - 1) * 0.8f
+    val lossPart = (5 - maxAllowedLosses).coerceAtLeast(0) * 0.35f
+    val dualPart = if (isDualArmadillo) 0.5f else 0f
+    val raw = 1f + (speedPart + snakesPart + lossPart + dualPart) * 0.6f
+    return kotlin.math.round(raw).toInt().coerceIn(1, 5)
+}
+
+/** One short cinematic line for the round intro, derived from the round's actual mechanics. */
+fun StageConfig.introTagline(): String = when {
+    snakeCount >= 3 -> "Three apex serpents hunt here."
+    isDualArmadillo && snakeCount >= 2 -> "Two armadillos. Two serpents. Stay sharp."
+    isDualArmadillo -> "Guide both armadillos at once."
+    theme == StageTheme.ICE -> "The ice is slippery — momentum is your enemy."
+    theme == StageTheme.VOLCANO -> "Lava pools burn your score."
+    snakeCount >= 2 -> "Two serpents stalk the ruins."
+    hasMovingTraps -> "Boulders roll across the arena."
+    hasEscapingFruits -> "The fruit here runs from you."
+    id == 1 -> "A patient snake. Learn the dance."
+    else -> "The snakes are faster here."
 }
