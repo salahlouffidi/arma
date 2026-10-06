@@ -1,6 +1,6 @@
 {
-  "name": "ARMASNAKE",
-  "description": "ARMASNAKE — LOUFFI EDITION: 3D physical board game featuring 16 unlocked rounds, solo armadillo and dual-armadillo mechanics, predator snakes, virtual joysticks, and rich arcade audio.",
+  "name": "Armadillo Escape",
+  "description": "Armadillo Escape arcade game with virtual joystick and round settings",
   "requestFramePermissions": [],
   "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
 }
