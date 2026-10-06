@@ -19,7 +19,6 @@ import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -36,8 +35,6 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.ui.text.rememberTextMeasurer
-import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -75,14 +72,11 @@ import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.AbsoluteAlignment
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.Path
-import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
@@ -101,8 +95,6 @@ import com.example.game.MatchConfig
 import com.example.game.CharacterId
 import com.example.game.RoleType
 import com.example.game.TableRenderer
-import com.example.game.WorldRenderer
-import androidx.compose.ui.graphics.drawscope.withTransform
 import com.example.game.Vector2
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
@@ -116,6 +108,15 @@ enum class GameScreenState {
     STAGE_SELECT,
     GAMEPLAY
 }
+
+data class StageClearData(
+    val stage: StageConfig,
+    val score: Int,
+    val fruits: Int,
+    val lost: Int,
+    val timeSeconds: Float,
+    val isNewRecord: Boolean
+)
 
 @Composable
 fun ArmadilloEscapeScreen(
@@ -135,7 +136,6 @@ fun ArmadilloEscapeScreen(
     val haptics = remember { HapticFeedbackHelper(context) }
     val progressManager = remember { StageProgressManager(context) }
     val soundManager = remember { SoundManager(context) }
-    val textMeasurer = rememberTextMeasurer()
 
     var currentScreen by remember { mutableStateOf(GameScreenState.INTRO) }
     var activeMatchConfig by remember { mutableStateOf(MatchConfig.solo()) }
@@ -150,8 +150,6 @@ fun ArmadilloEscapeScreen(
     var isGamePaused by remember { mutableStateOf(false) }
     var showInGameSettings by remember { mutableStateOf(false) }
     var inGameSettingsVersion by remember { mutableIntStateOf(0) }
-    var showFirstRunHint by remember { mutableStateOf(true) }
-    var showHowToPlay by remember { mutableStateOf(false) }
 
     // Virtual Joystick Finger Input Vectors (Continuous Normalized: -1f..1f)
     // P1 (Golden Armadillo)
@@ -194,17 +192,6 @@ fun ArmadilloEscapeScreen(
 
     LaunchedEffect(currentScreen) {
         onSetGameplayActive?.invoke(currentScreen == GameScreenState.GAMEPLAY)
-    }
-
-    // First-run teaching hint: show briefly whenever Round 1 gameplay begins, then auto-dismiss.
-    LaunchedEffect(currentScreen, currentStageId) {
-        if (currentScreen == GameScreenState.GAMEPLAY && currentStageId == 1) {
-            showFirstRunHint = true
-            kotlinx.coroutines.delay(7000)
-            showFirstRunHint = false
-        } else {
-            showFirstRunHint = false
-        }
     }
 
     LaunchedEffect(isInPip) {
@@ -258,45 +245,9 @@ fun ArmadilloEscapeScreen(
             },
             onArmadilloSpawned = {
                 soundManager.playNewArmadilloSpawned()
-            },
-            onComboMilestone = { combo ->
-                haptics.appleEat()
-                soundManager.playComboMilestone(combo)
-            },
-            onDiamondCollected = {
-                haptics.powerActivated()
-                soundManager.playDiamond()
-            },
-            onMagnetCollected = {
-                haptics.powerActivated()
-                soundManager.playMagnet()
-            },
-            onRainbowCollected = {
-                haptics.powerActivated()
-                soundManager.playRainbow()
-            },
-            onRareFruitSpawned = {
-                soundManager.playRareSpawn()
-            },
-            onShieldCollected = {
-                haptics.powerActivated()
-                soundManager.playShield()
-            },
-            onFreezeCollected = {
-                haptics.powerActivated()
-                soundManager.playFreeze()
-            },
-            onGoldenCollected = {
-                haptics.powerActivated()
-                soundManager.playGolden()
-            },
-            onShieldBlocked = {
-                haptics.powerProtectedHit()
-                soundManager.playProtectionHit()
             }
         ).apply {
             onStageCompleted = { stage, score, fruits, lost, time ->
-                val nextWasUnlocked = stage.id >= 16 || progressManager.isStageUnlocked(stage.id + 1)
                 val isNewRecord = progressManager.recordStageScore(stage.id, score)
                 progressManager.completeStage(stage.id)
                 highestUnlockedStage = progressManager.getHighestUnlockedStage()
@@ -312,10 +263,7 @@ fun ArmadilloEscapeScreen(
                     fruits = fruits,
                     lost = lost,
                     timeSeconds = time,
-                    isNewRecord = isNewRecord,
-                    bestScore = progressManager.getStageHighScore(stage.id),
-                    bestCombo = this@apply.bestComboMultiplier,
-                    newlyUnlocked = if (!nextWasUnlocked && progressManager.isStageUnlocked(stage.id + 1)) StageConfig.getStage(stage.id + 1) else null
+                    isNewRecord = isNewRecord
                 )
             }
             onGameOver = { stage, score, fruits, lost, time ->
@@ -327,8 +275,7 @@ fun ArmadilloEscapeScreen(
                     fruits = fruits,
                     lost = lost,
                     maxAllowedLosses = stage.maxAllowedLosses,
-                    timeSeconds = time,
-                    bestScore = progressManager.getStageHighScore(stage.id)
+                    timeSeconds = time
                 )
             }
         }
@@ -369,12 +316,7 @@ fun ArmadilloEscapeScreen(
                 lastTime = now
                 frameTimeNanos = now
 
-                if (stageClearDialogData != null || gameOverDialogData != null) {
-                    // Round over: the world is frozen behind the result screen, but particles,
-                    // floating labels and camera reactions keep settling (cinematic, not instant).
-                    gameEngine.updateEffectsOnly(dt)
-                    tick++
-                } else if (!isGamePaused) {
+                if (!isGamePaused) {
                     // Direct Virtual Joystick Finger Input driving armadillo and snake physics
                     gameEngine.update(
                         dt = dt,
@@ -402,13 +344,8 @@ fun ArmadilloEscapeScreen(
         }
     }
 
-    // Top-level Screen Router — screens crossfade into each other (no hard cuts / black frames).
-    androidx.compose.animation.Crossfade(
-        targetState = currentScreen,
-        animationSpec = tween(420),
-        label = "screenRouter"
-    ) { screen ->
-    when (screen) {
+    // Top-level Screen Router
+    when (currentScreen) {
         GameScreenState.INTRO -> {
             IntroScreen(
                 soundManager = soundManager,
@@ -418,29 +355,25 @@ fun ArmadilloEscapeScreen(
             )
         }
         GameScreenState.MAIN_MENU -> {
-            ConsoleHomeScreen(
+            MainMenuScreen(
                 currentStageId = currentStageId,
-                highestUnlocked = highestUnlockedStage,
                 soundManager = soundManager,
-                onPlay = {
-                    // Dominant action: jump straight into the selected (or furthest unlocked) round.
-                    val playId = if (progressManager.isStageUnlocked(currentStageId)) currentStageId else highestUnlockedStage
-                    currentStageId = playId
-                    activeMatchConfig = MatchConfig.solo()
-                    gameEngine.loadStage(StageConfig.getStage(playId), activeMatchConfig)
-                    joystickInputX = 0f
-                    joystickInputY = 0f
-                    joystickInputX2 = 0f
-                    joystickInputY2 = 0f
-                    currentScreen = GameScreenState.GAMEPLAY
-                },
-                onRounds = {
+                onStartGame = { stageId ->
+                    currentStageId = stageId
                     activeMatchConfig = MatchConfig.solo()
                     currentScreen = GameScreenState.STAGE_SELECT
                 },
-                onHowToPlay = { showHowToPlay = true },
-                onSettings = { showAudioSettings = true },
-                onMultiplayer = { currentScreen = GameScreenState.GAME_MODE_SELECT }
+                onOpenStageSelect = {
+                    activeMatchConfig = MatchConfig.solo()
+                    currentScreen = GameScreenState.STAGE_SELECT
+                },
+                onOpenAudioSettings = {
+                    showAudioSettings = true
+                },
+                onOpenGameModeSelect = {
+                    activeMatchConfig = MatchConfig.solo()
+                    currentScreen = GameScreenState.STAGE_SELECT
+                }
             )
         }
         GameScreenState.GAME_MODE_SELECT -> {
@@ -474,7 +407,7 @@ fun ArmadilloEscapeScreen(
             )
         }
         GameScreenState.STAGE_SELECT -> {
-            RoundLibraryScreen(
+            StageSelectScreen(
                 currentStageId = currentStageId,
                 progressManager = progressManager,
                 soundManager = soundManager,
@@ -493,9 +426,9 @@ fun ArmadilloEscapeScreen(
                     snake2InputY = 0f
                     currentScreen = GameScreenState.GAMEPLAY
                 },
-                onBack = {
+                onBackToMenu = {
                     if (activeMatchConfig.isSolo) {
-                        currentScreen = GameScreenState.MAIN_MENU
+                        currentScreen = GameScreenState.GAME_MODE_SELECT
                     } else {
                         currentScreen = GameScreenState.MULTIPLAYER_CONFIG
                     }
@@ -528,13 +461,6 @@ fun ArmadilloEscapeScreen(
             gameEngine.setBoardDimensions(tableHalfW, tableHalfH)
         }
 
-        // Slow celebratory camera pull-back while the Round Complete screen is up
-        val celebrateZoom by androidx.compose.animation.core.animateFloatAsState(
-            targetValue = if (stageClearDialogData != null) 1f else 0f,
-            animationSpec = tween(1600),
-            label = "celebrateZoom"
-        )
-
         // ==================== FIXED 3D TABLETOP CANVAS ====================
         // The table, background, camera NEVER rotate with phone motion
         Canvas(
@@ -542,104 +468,63 @@ fun ArmadilloEscapeScreen(
                 .fillMaxSize()
                 .testTag("game_board_canvas")
         ) {
-            // Read tick to trigger redraw every frame
+            // Read tick to trigger recomposition
             @Suppress("UNUSED_VARIABLE")
             val currentTick = tick
-            val stageTheme = gameEngine.currentStage.theme
-            val animTime = ((frameTimeNanos / 1_000_000L) % 600_000L) / 1000f
 
-            // 0. Full procedural world behind the arena; gentle parallax follows the player
-            val camX = (gameEngine.armadillo.pos.x / gameEngine.boardHalfWidth).coerceIn(-1f, 1f)
-            WorldRenderer.drawWorld(
-                this, size.width, size.height, stageTheme, animTime,
-                parallax = -camX * 0.35f,
-                detail = 1
+            // 1. Draw Fixed Themed Table
+            TableRenderer.drawTable(
+                scope = this,
+                center = tableCenter,
+                halfW = tableHalfW,
+                halfH = tableHalfH,
+                theme = gameEngine.currentStage.theme
             )
 
-            // Camera: controlled shake + zoom impulse (+ slow celebratory pull-back on round clear)
-            val shake = gameEngine.cameraShake
-            val wc = if (shake > 0.05f) {
-                Offset(
-                    tableCenter.x + kotlin.math.sin(tick * 1.7f) * shake,
-                    tableCenter.y + kotlin.math.cos(tick * 2.3f) * shake
-                )
-            } else tableCenter
-            val zoom = 1f + gameEngine.cameraZoomPulse - 0.05f * celebrateZoom
+            // 1b. Draw Obstacles
+            TableRenderer.drawObstacles(
+                scope = this,
+                obstacles = gameEngine.obstacles,
+                boardCenter = tableCenter
+            )
 
-            withTransform({ scale(zoom, zoom, wc) }) {
-                // 1. Themed table + arena surface details
-                TableRenderer.drawTable(scope = this, center = wc, halfW = tableHalfW, halfH = tableHalfH, theme = stageTheme)
-                WorldRenderer.drawArenaDecor(this, wc, tableHalfW, tableHalfH, stageTheme, animTime)
+            // 2. Draw Apples
+            TableRenderer.drawApples(
+                scope = this,
+                apples = gameEngine.apples,
+                boardCenter = tableCenter
+            )
 
-                // 1a. Environment reactions: glow rim, frost, rare-fruit dim
-                TableRenderer.drawWorldPulse(
+            // 3. Draw 3D Armadillos
+            TableRenderer.drawArmadillo(
+                scope = this,
+                armadillo = gameEngine.armadillo,
+                boardCenter = tableCenter,
+                isBlue = false
+            )
+            val a2 = gameEngine.armadillo2
+            if (a2 != null) {
+                TableRenderer.drawArmadillo(
                     scope = this,
-                    center = wc,
-                    halfW = tableHalfW,
-                    halfH = tableHalfH,
-                    pulse = gameEngine.worldPulse,
-                    color = gameEngine.worldPulseColor
+                    armadillo = a2,
+                    boardCenter = tableCenter,
+                    isBlue = true
                 )
-                TableRenderer.drawFreezeOverlay(this, wc, tableHalfW, tableHalfH, gameEngine.freezeTimer, GameEngine.FREEZE_DURATION)
-                TableRenderer.drawRareDim(this, size.width, size.height, gameEngine.rareAlertTimer, GameEngine.RARE_ALERT_DURATION)
-
-                // 1b. Obstacles
-                TableRenderer.drawObstacles(scope = this, obstacles = gameEngine.obstacles, boardCenter = wc)
-
-                // 2. Fruit
-                TableRenderer.drawApples(scope = this, apples = gameEngine.apples, boardCenter = wc)
-
-                // 3. Armadillos
-                TableRenderer.drawArmadillo(scope = this, armadillo = gameEngine.armadillo, boardCenter = wc, isBlue = false)
-                val a2 = gameEngine.armadillo2
-                if (a2 != null) {
-                    TableRenderer.drawArmadillo(scope = this, armadillo = a2, boardCenter = wc, isBlue = true)
-                }
-
-                // 4. Snakes (icy while FREEZE is active)
-                TableRenderer.drawSnakes(scope = this, snakes = gameEngine.snakes, boardCenter = wc, frozen = gameEngine.freezeTimer > 0f)
-
-                // 5. Particles
-                TableRenderer.drawParticles(scope = this, particles = gameEngine.particles, boardCenter = wc)
-
-                // 5b. Rare power-up beacon: pulsing ring + bobbing chevron pointing at it
-                val rarePos = gameEngine.activeRareFruitPos
-                if (rarePos != null) {
-                    val bx = wc.x + rarePos.x
-                    val by = wc.y + rarePos.y
-                    val pulse = (kotlin.math.sin(tick * 0.2f) * 0.5f + 0.5f)
-                    drawCircle(
-                        color = Color(0xFFFFEA00).copy(alpha = 0.25f + 0.35f * pulse),
-                        radius = 34f + 10f * pulse,
-                        center = Offset(bx, by),
-                        style = Stroke(width = 2.5f)
-                    )
-                    val chevY = by - 48f - 6f * pulse
-                    val chevron = Path().apply {
-                        moveTo(bx - 8f, chevY)
-                        lineTo(bx, chevY + 9f)
-                        lineTo(bx + 8f, chevY)
-                    }
-                    drawPath(chevron, color = Color(0xFFFFEA00).copy(alpha = 0.85f), style = Stroke(width = 3f))
-                }
-
-                // 5c. Combo badge floating above the player
-                val comboArm = if (!gameEngine.armadillo.isEaten) gameEngine.armadillo else a2
-                if (comboArm != null && !comboArm.isEaten) {
-                    TableRenderer.drawComboBadge(
-                        this, textMeasurer,
-                        Offset(wc.x + comboArm.pos.x, wc.y + comboArm.pos.y),
-                        gameEngine.comboMultiplier(),
-                        animTime
-                    )
-                }
-
-                // 6. Floating "+N" / combo score labels
-                TableRenderer.drawFloatingTexts(scope = this, texts = gameEngine.floatingTexts, boardCenter = wc, measurer = textMeasurer)
             }
 
-            // 7. Screen-space danger cue (subtle red edge glow when a snake is close)
-            TableRenderer.drawDangerEdge(this, size.width, size.height, gameEngine.dangerLevel)
+            // 4. Draw 3D Snakes
+            TableRenderer.drawSnakes(
+                scope = this,
+                snakes = gameEngine.snakes,
+                boardCenter = tableCenter
+            )
+
+            // 5. Draw Particles
+            TableRenderer.drawParticles(
+                scope = this,
+                particles = gameEngine.particles,
+                boardCenter = tableCenter
+            )
         }
 
         if (isInPip) {
@@ -660,29 +545,232 @@ fun ArmadilloEscapeScreen(
                 )
             }
         } else {
-            // Full-screen overlay layer so each console overlay can align anywhere on screen.
-            Box(modifier = Modifier.fillMaxSize()) {
-            // ==================== CONSOLE HUD (minimal, contextual) ====================
-            // Each overlay reads the frame counter itself, so only these small scopes
-            // recompose per frame — the world canvas and joysticks are unaffected.
-            ConsoleHud(
-                engine = gameEngine,
-                frame = { tick },
-                onPause = {
-                    soundManager.playMenuClick()
-                    isGamePaused = !isGamePaused
-                },
-                onSettings = {
-                    soundManager.playMenuClick()
-                    isGamePaused = true
-                    showInGameSettings = true
+            // ==================== HUD: TOP BAR (SINGLE HORIZONTAL ROW) ====================
+            val isAnyPowerActive = gameEngine.armadillo.isPowerActive || (gameEngine.armadillo2?.isPowerActive == true)
+            val activePowerTimer = if (gameEngine.armadillo.isPowerActive) gameEngine.armadillo.powerTimer
+                else (gameEngine.armadillo2?.powerTimer ?: 0f)
+            val activePowerChances = if (gameEngine.armadillo.isPowerActive) gameEngine.armadillo.powerChancesRemaining
+                else (gameEngine.armadillo2?.powerChancesRemaining ?: 0)
+
+            Box(
+                modifier = Modifier
+                    .align(Alignment.TopCenter)
+                    .fillMaxWidth()
+                    .padding(horizontal = 6.dp, vertical = 6.dp)
+            ) {
+                // Base HUD Row (Always visible, perfectly stationary)
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    // LEFT: Navigation & Round Selector
+                    Row(
+                        horizontalArrangement = Arrangement.spacedBy(4.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        // Back to Round Select
+                        Surface(
+                            modifier = Modifier
+                                .clickable {
+                                    soundManager.playMenuClick()
+                                    currentScreen = GameScreenState.STAGE_SELECT
+                                }
+                                .testTag("back_to_stages_button"),
+                            color = Color(0xD92E1508),
+                            shape = RoundedCornerShape(10.dp),
+                            border = androidx.compose.foundation.BorderStroke(1.dp, Color(0x80D4AF37))
+                        ) {
+                            Row(
+                                modifier = Modifier.padding(horizontal = 6.dp, vertical = 6.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Icon(
+                                    imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+                                    contentDescription = "Rounds",
+                                    tint = Color(0xFFFFD54F),
+                                    modifier = Modifier.size(13.dp)
+                                )
+                                Spacer(modifier = Modifier.width(2.dp))
+                                Text(
+                                    text = "ROUNDS",
+                                    color = Color(0xFFFFE0B2),
+                                    fontSize = 9.5.sp,
+                                    fontWeight = FontWeight.Bold
+                                )
+                            }
+                        }
+
+                    // Stage Selection Trigger
+                    Surface(
+                        modifier = Modifier
+                            .widthIn(max = 110.dp)
+                            .clickable { showStageSelector = true }
+                            .testTag("stage_badge_button"),
+                        color = Color(0xD922130A),
+                        shape = RoundedCornerShape(10.dp),
+                        border = androidx.compose.foundation.BorderStroke(1.dp, Color(0x80D4AF37))
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(horizontal = 6.dp, vertical = 6.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(
+                                text = "R${gameEngine.currentStage.id}: ${gameEngine.currentStage.title.uppercase()}",
+                                color = Color(0xFFFFE0B2),
+                                fontSize = 9.5.sp,
+                                fontWeight = FontWeight.Bold,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
+                            )
+                            Spacer(modifier = Modifier.width(2.dp))
+                            Text(
+                                text = "▾",
+                                color = Color(0xFFFFD54F),
+                                fontSize = 9.5.sp,
+                                fontWeight = FontWeight.Bold
+                            )
+                        }
+                    }
                 }
+
+                // CENTER: Goal, Score, Lost (ON THE SAME HORIZONTAL LINE AS R1: GARDEN)
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(4.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    // Stage Fruit Goal Tracker
+                    Surface(
+                        color = Color(0xD922130A),
+                        shape = RoundedCornerShape(10.dp),
+                        border = androidx.compose.foundation.BorderStroke(1.dp, Color(0x6081C784))
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(horizontal = 6.dp, vertical = 5.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(
+                                text = "GOAL: ",
+                                color = Color(0xFFC8E6C9),
+                                fontSize = 9.sp,
+                                fontWeight = FontWeight.Medium
+                            )
+                            Text(
+                                text = "${gameEngine.stageFruitsCollected}/${gameEngine.currentStage.targetFruits} 🍎",
+                                color = Color(0xFFFFD54F),
+                                fontSize = 10.sp,
+                                fontWeight = FontWeight.ExtraBold
+                            )
+                        }
+                    }
+
+                    // Score Pill
+                    Surface(
+                        modifier = Modifier.scale(scoreScale.value),
+                        color = Color(0xE62A170C),
+                        shape = RoundedCornerShape(10.dp),
+                        border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFFFF7043))
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(horizontal = 6.dp, vertical = 5.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(
+                                text = "SCORE: ",
+                                color = Color(0xFFFFCCBC),
+                                fontSize = 9.sp,
+                                fontWeight = FontWeight.SemiBold
+                            )
+                            Text(
+                                text = "${gameEngine.stats.score}",
+                                color = Color(0xFFFFD54F),
+                                fontSize = 11.5.sp,
+                                fontWeight = FontWeight.ExtraBold
+                            )
+                        }
+                    }
+
+                    // Armadillos Lost Pill
+                    Surface(
+                        color = Color(0xE6231208),
+                        shape = RoundedCornerShape(10.dp),
+                        border = androidx.compose.foundation.BorderStroke(1.dp, Color(0x6081C784))
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(horizontal = 6.dp, vertical = 5.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(
+                                text = "LOST: ",
+                                color = Color(0xFFC8E6C9),
+                                fontSize = 9.sp,
+                                fontWeight = FontWeight.Medium
+                            )
+                            Text(
+                                text = "${gameEngine.stats.armadillosLost}/${gameEngine.currentStage.maxAllowedLosses}",
+                                color = if (gameEngine.stats.armadillosLost >= gameEngine.currentStage.maxAllowedLosses) Color(0xFFFF5252) else Color(0xFFE57373),
+                                fontSize = 10.sp,
+                                fontWeight = FontWeight.Bold
+                            )
+                        }
+                    }
+                }
+
+                // RIGHT: Settings, Pause (Fixed compact 40dp icon-only controls)
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(4.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    // Settings Button (Fixed 40dp compact icon-only control)
+                    Surface(
+                        color = Color(0xE62A170C),
+                        shape = RoundedCornerShape(12.dp),
+                        border = androidx.compose.foundation.BorderStroke(1.dp, Color(0x60D4AF37)),
+                        modifier = Modifier
+                            .size(40.dp)
+                            .clickable {
+                                soundManager.playMenuClick()
+                                isGamePaused = true
+                                showInGameSettings = true
+                            }
+                            .testTag("hud_settings_button")
+                    ) {
+                        Box(
+                            contentAlignment = Alignment.Center,
+                            modifier = Modifier.size(40.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Settings,
+                                contentDescription = "Settings",
+                                tint = Color(0xFFFFD54F),
+                                modifier = Modifier.size(18.dp)
+                            )
+                        }
+                    }
+
+                    // Pause Button (Fixed 40dp compact icon-only control)
+                    PauseButton(
+                        isPaused = isGamePaused,
+                        onClick = {
+                            soundManager.playMenuClick()
+                            isGamePaused = !isGamePaused
+                        }
+                    )
+                }
+            }
+
+            // OVERDRIVE Independent Overlay in Dedicated Top Position
+            // Positioned horizontally directly to the left of Settings and Pause in the single top row.
+            // When active/inactive, base HUD components remain 100% stationary.
+            OverdriveStatusPill(
+                isPowerActive = isAnyPowerActive,
+                powerTimer = activePowerTimer,
+                powerChancesRemaining = activePowerChances,
+                fruitsCollectedSinceEvent = gameEngine.fruitsCollectedSinceEvent,
+                modifier = Modifier
+                    .align(Alignment.CenterEnd)
+                    .padding(end = 88.dp)
             )
-            PowerChips(engine = gameEngine, frame = { tick })
-            RareFruitToast(engine = gameEngine, frame = { tick })
-            ConsoleBanner(engine = gameEngine, frame = { tick })
-            CinematicRoundIntro(engine = gameEngine, frame = { tick })
-            FirstRunHint(visible = gameEngine.currentStage.id == 1 && showFirstRunHint)
         }
 
 
@@ -1083,22 +1171,22 @@ fun ArmadilloEscapeScreen(
 
         // ==================== STAGE CLEAR CELEBRATION DIALOG ====================
         stageClearDialogData?.takeIf { !isInPip }?.let { clearData ->
-            RoundCompleteOverlay(
+            StageClearDialog(
                 data = clearData,
-                onContinue = {
+                onNextStage = {
                     val nextId = (clearData.stage.id + 1).coerceAtMost(16)
                     currentStageId = nextId
                     val config = StageConfig.getStage(nextId)
                     gameEngine.loadStage(config, activeMatchConfig)
                     stageClearDialogData = null
                 },
-                onReplay = {
+                onRetryStage = {
                     val retryId = clearData.stage.id
                     val config = StageConfig.getStage(retryId)
                     gameEngine.resetRound()
                     stageClearDialogData = null
                 },
-                onRoundSelect = {
+                onSelectOther = {
                     stageClearDialogData = null
                     currentScreen = GameScreenState.STAGE_SELECT
                 }
@@ -1107,10 +1195,10 @@ fun ArmadilloEscapeScreen(
 
         // ==================== GAME OVER DIALOG ====================
         gameOverDialogData?.takeIf { !isInPip }?.let { goData ->
-            GameOverOverlay(
+            GameOverDialog(
                 data = goData,
                 statusMessage = adStatusMessage,
-                onRetry = {
+                onRetryRound = {
                     val activity = context as? Activity
                     gameOverDialogData = null
                     adStatusMessage = null
@@ -1138,7 +1226,7 @@ fun ArmadilloEscapeScreen(
                         doResetAndStart()
                     }
                 },
-                onWatchAd = {
+                onWatchAdSecondChance = {
                     val activity = context as? Activity
                     if (activity != null) {
                         effectiveAdManager.showRewarded(
@@ -1165,15 +1253,10 @@ fun ArmadilloEscapeScreen(
                         adStatusMessage = "Rewarded ad unavailable. Tap RETRY!"
                     }
                 },
-                onRoundSelect = {
+                onExitToRounds = {
                     gameOverDialogData = null
                     adStatusMessage = null
                     currentScreen = GameScreenState.STAGE_SELECT
-                },
-                onHome = {
-                    gameOverDialogData = null
-                    adStatusMessage = null
-                    currentScreen = GameScreenState.MAIN_MENU
                 }
             )
         }
@@ -1225,19 +1308,6 @@ fun ArmadilloEscapeScreen(
         }
     }
     }
-    }
-    }
-
-    // ==================== GLOBAL DIALOGS (available from any screen) ====================
-    // The in-game audio dialog lives in the gameplay branch; menus get their own instance here.
-    if (showAudioSettings && currentScreen != GameScreenState.GAMEPLAY) {
-        AudioSettingsDialog(
-            soundManager = soundManager,
-            onDismiss = { showAudioSettings = false }
-        )
-    }
-    if (showHowToPlay) {
-        HowToPlayDialog(onDismiss = { showHowToPlay = false })
     }
 }
 
@@ -1378,6 +1448,191 @@ private fun StageSelectionDialog(
     }
 }
 
+@Composable
+private fun StageClearDialog(
+    data: StageClearData,
+    onNextStage: () -> Unit,
+    onRetryStage: () -> Unit,
+    onSelectOther: () -> Unit
+) {
+    Dialog(onDismissRequest = {}) {
+        Surface(
+            shape = RoundedCornerShape(22.dp),
+            color = Color(0xFF1C1008),
+            border = androidx.compose.foundation.BorderStroke(2.dp, Color(0xFFFFD700)),
+            shadowElevation = 16.dp,
+            modifier = Modifier
+                .fillMaxWidth(0.95f)
+                .padding(vertical = 12.dp)
+        ) {
+            Column(
+                modifier = Modifier.padding(18.dp),
+                horizontalAlignment = Alignment.CenterHorizontally
+            ) {
+                Text(
+                    text = if (data.stage.id == 16) "👑 16-ROUND DUAL MASTER! 👑" else if (data.stage.id == 8) "🌟 ORIGINAL CAMPAIGN CLEARED! 🌟" else "🎉 ROUND ${data.stage.id} CLEARED!",
+                    color = Color(0xFFFFD700),
+                    fontSize = 17.sp,
+                    fontWeight = FontWeight.ExtraBold,
+                    letterSpacing = 0.5.sp
+                )
+                Spacer(modifier = Modifier.height(4.dp))
+                Text(
+                    text = "${data.stage.title} — ${data.stage.subtitle}",
+                    color = Color(0xFFFFE0B2),
+                    fontSize = 12.sp,
+                    fontWeight = FontWeight.Medium
+                )
+
+                Spacer(modifier = Modifier.height(12.dp))
+
+                // Stats Row
+                Surface(
+                    color = Color(0xFF2B180D),
+                    shape = RoundedCornerShape(12.dp),
+                    border = androidx.compose.foundation.BorderStroke(1.dp, Color(0x40D4AF37)),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Row(
+                        modifier = Modifier.padding(vertical = 10.dp, horizontal = 10.dp),
+                        horizontalArrangement = Arrangement.SpaceAround
+                    ) {
+                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                            Text(text = "SCORE", color = Color(0xFFBCAAA4), fontSize = 10.sp)
+                            Text(text = "${data.score}", color = Color(0xFFFFD54F), fontSize = 14.sp, fontWeight = FontWeight.Bold)
+                        }
+                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                            Text(text = "FRUITS", color = Color(0xFFBCAAA4), fontSize = 10.sp)
+                            Text(text = "${data.fruits}/${data.stage.targetFruits}", color = Color(0xFF81C784), fontSize = 14.sp, fontWeight = FontWeight.Bold)
+                        }
+                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                            Text(text = "LOST", color = Color(0xFFBCAAA4), fontSize = 10.sp)
+                            Text(text = "${data.lost}/${data.stage.maxAllowedLosses}", color = Color(0xFFE57373), fontSize = 14.sp, fontWeight = FontWeight.Bold)
+                        }
+                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                            Text(text = "TIME", color = Color(0xFFBCAAA4), fontSize = 10.sp)
+                            Text(text = formatGameTime(data.timeSeconds), color = Color(0xFFFFE0B2), fontSize = 14.sp, fontWeight = FontWeight.Bold)
+                        }
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(8.dp))
+
+                val performanceRating = when {
+                    data.lost == 0 -> "★★★ PERFECT"
+                    data.lost == 1 -> "★★☆ EXCELLENT"
+                    data.lost < data.stage.maxAllowedLosses -> "★★☆ GREAT"
+                    else -> "★☆☆ SURVIVED"
+                }
+                Surface(
+                    color = Color(0xFF381F0E),
+                    shape = RoundedCornerShape(8.dp),
+                    border = androidx.compose.foundation.BorderStroke(1.dp, Color(0x60D4AF37))
+                ) {
+                    Text(
+                        text = performanceRating,
+                        color = Color(0xFFFFD54F),
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.Black,
+                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp)
+                    )
+                }
+
+                if (data.isNewRecord) {
+                    Spacer(modifier = Modifier.height(6.dp))
+                    Text(
+                        text = "⭐ NEW ROUND HIGH SCORE! ⭐",
+                        color = Color(0xFFFFD700),
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
+
+                Spacer(modifier = Modifier.height(12.dp))
+
+                // Action Buttons
+                if (data.stage.id < 16) {
+                    val next = StageConfig.getStage(data.stage.id + 1)
+                    Button(
+                        onClick = onNextStage,
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = Color(0xFFD4AF37),
+                            contentColor = Color(0xFF1B0E05)
+                        ),
+                        shape = RoundedCornerShape(12.dp),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(42.dp)
+                            .testTag("next_stage_button")
+                    ) {
+                        Text(
+                            text = "NEXT: ROUND ${next.id} (${next.title}) →",
+                            fontSize = 13.sp,
+                            fontWeight = FontWeight.ExtraBold
+                        )
+                    }
+                    Spacer(modifier = Modifier.height(8.dp))
+                } else {
+                    Button(
+                        onClick = onRetryStage,
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = Color(0xFFFFD700),
+                            contentColor = Color(0xFF1B0E05)
+                        ),
+                        shape = RoundedCornerShape(12.dp),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(42.dp)
+                            .testTag("replay_arena_button")
+                    ) {
+                        Text(
+                            text = "👑 REPLAY FINAL DUAL ARENA",
+                            fontSize = 13.sp,
+                            fontWeight = FontWeight.ExtraBold
+                        )
+                    }
+                    Spacer(modifier = Modifier.height(8.dp))
+                }
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    Button(
+                        onClick = onRetryStage,
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = Color(0xFF3E2516),
+                            contentColor = Color(0xFFFFCCBC)
+                        ),
+                        shape = RoundedCornerShape(10.dp),
+                        modifier = Modifier
+                            .weight(1f)
+                            .height(36.dp)
+                            .testTag("retry_stage_button")
+                    ) {
+                        Text(text = "↺ RETRY ROUND", fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                    }
+
+                    Button(
+                        onClick = onSelectOther,
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = Color(0xFF2C190F),
+                            contentColor = Color(0xFFFFE0B2)
+                        ),
+                        shape = RoundedCornerShape(10.dp),
+                        modifier = Modifier
+                            .weight(1f)
+                            .height(36.dp)
+                            .testTag("stages_dialog_menu_button")
+                    ) {
+                        Text(text = "🏆 ROUNDS", fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                    }
+                }
+            }
+        }
+    }
+}
+
 private fun formatGameTime(totalSeconds: Float): String {
     val sec = totalSeconds.toInt()
     val minutes = sec / 60
@@ -1387,3 +1642,263 @@ private fun formatGameTime(totalSeconds: Float): String {
     return "$mStr:$sStr"
 }
 
+data class GameOverData(
+    val stage: StageConfig,
+    val score: Int,
+    val fruits: Int,
+    val lost: Int,
+    val maxAllowedLosses: Int,
+    val timeSeconds: Float
+)
+
+@Composable
+private fun GameOverDialog(
+    data: GameOverData,
+    statusMessage: String? = null,
+    onRetryRound: () -> Unit,
+    onWatchAdSecondChance: () -> Unit,
+    onExitToRounds: () -> Unit
+) {
+    Dialog(onDismissRequest = {}) {
+        Surface(
+            shape = RoundedCornerShape(20.dp),
+            color = Color(0xF71A0A04),
+            border = androidx.compose.foundation.BorderStroke(2.dp, Color(0xFFE53935)),
+            shadowElevation = 20.dp,
+            modifier = Modifier
+                .fillMaxWidth(0.96f)
+                .padding(vertical = 4.dp)
+                .testTag("game_over_dialog")
+        ) {
+            Column(
+                modifier = Modifier
+                    .padding(horizontal = 16.dp, vertical = 10.dp)
+                    .verticalScroll(rememberScrollState()),
+                horizontalAlignment = Alignment.CenterHorizontally
+            ) {
+                // Header Banner
+                Surface(
+                    color = Color(0xFF3B1008),
+                    shape = RoundedCornerShape(10.dp),
+                    border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFFE53935)),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Text(
+                        text = "💀 GAME OVER 💀",
+                        color = Color(0xFFFF5252),
+                        fontSize = 17.sp,
+                        fontWeight = FontWeight.Black,
+                        letterSpacing = 1.sp,
+                        textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+                        modifier = Modifier.padding(vertical = 5.dp)
+                    )
+                }
+
+                Spacer(modifier = Modifier.height(8.dp))
+
+                // Responsive 2-column landscape layout: Left = Stats, Right = Action Buttons
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(12.dp),
+                    verticalAlignment = Alignment.Top
+                ) {
+                    // LEFT COLUMN: Round info & Stats Card
+                    Column(
+                        modifier = Modifier.weight(1.1f),
+                        verticalArrangement = Arrangement.spacedBy(6.dp)
+                    ) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(6.dp)
+                        ) {
+                            Text(
+                                text = "ROUND ${data.stage.id.toString().padStart(2, '0')}",
+                                color = Color(0xFFFFD54F),
+                                fontSize = 14.sp,
+                                fontWeight = FontWeight.ExtraBold,
+                                letterSpacing = 0.5.sp
+                            )
+                            Text(
+                                text = "• ${data.stage.title.uppercase()}",
+                                color = Color(0xFFFFCCBC),
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.SemiBold,
+                                maxLines = 1
+                            )
+                        }
+
+                        // Performance Summary Grid Card
+                        Surface(
+                            color = Color(0xFF241006),
+                            shape = RoundedCornerShape(10.dp),
+                            border = androidx.compose.foundation.BorderStroke(1.dp, Color(0x60D4AF37)),
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Column(
+                                modifier = Modifier.padding(horizontal = 10.dp, vertical = 7.dp),
+                                verticalArrangement = Arrangement.spacedBy(5.dp)
+                            ) {
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Text(
+                                        text = "ARMADILLOS LOST",
+                                        color = Color(0xFFBCAAA4),
+                                        fontSize = 10.sp,
+                                        fontWeight = FontWeight.SemiBold
+                                    )
+                                    Text(
+                                        text = "${data.lost} / ${data.maxAllowedLosses} 💔",
+                                        color = Color(0xFFFF5252),
+                                        fontSize = 12.sp,
+                                        fontWeight = FontWeight.Black
+                                    )
+                                }
+
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Text(
+                                        text = "SCORE",
+                                        color = Color(0xFFBCAAA4),
+                                        fontSize = 10.sp,
+                                        fontWeight = FontWeight.SemiBold
+                                    )
+                                    Text(
+                                        text = "${data.score}",
+                                        color = Color(0xFFFFD54F),
+                                        fontSize = 12.sp,
+                                        fontWeight = FontWeight.Bold
+                                    )
+                                }
+
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Text(
+                                        text = "FRUITS COLLECTED",
+                                        color = Color(0xFFBCAAA4),
+                                        fontSize = 10.sp,
+                                        fontWeight = FontWeight.SemiBold
+                                    )
+                                    Text(
+                                        text = "${data.fruits} / ${data.stage.targetFruits} 🍎",
+                                        color = Color(0xFF81C784),
+                                        fontSize = 12.sp,
+                                        fontWeight = FontWeight.Bold
+                                    )
+                                }
+
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Text(
+                                        text = "TIME SURVIVED",
+                                        color = Color(0xFFBCAAA4),
+                                        fontSize = 10.sp,
+                                        fontWeight = FontWeight.SemiBold
+                                    )
+                                    Text(
+                                        text = formatGameTime(data.timeSeconds),
+                                        color = Color(0xFFFFE0B2),
+                                        fontSize = 12.sp,
+                                        fontWeight = FontWeight.Bold
+                                    )
+                                }
+                            }
+                        }
+
+                        if (!statusMessage.isNullOrEmpty()) {
+                            Text(
+                                text = statusMessage,
+                                color = Color(0xFFFF8A65),
+                                fontSize = 9.5.sp,
+                                fontWeight = FontWeight.Bold
+                            )
+                        }
+                    }
+
+                    // RIGHT COLUMN: Action Buttons
+                    Column(
+                        modifier = Modifier.weight(0.9f),
+                        verticalArrangement = Arrangement.spacedBy(6.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally
+                    ) {
+                        // 1. Primary RETRY button (Prominent, Gold, Always Visible)
+                        Button(
+                            onClick = onRetryRound,
+                            colors = ButtonDefaults.buttonColors(
+                                containerColor = Color(0xFFD4AF37),
+                                contentColor = Color(0xFF1B0E05)
+                            ),
+                            shape = RoundedCornerShape(12.dp),
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(44.dp)
+                                .testTag("game_over_retry_button")
+                        ) {
+                            Text(
+                                text = "↻ RETRY",
+                                fontSize = 13.sp,
+                                fontWeight = FontWeight.Black,
+                                letterSpacing = 0.5.sp
+                            )
+                        }
+
+                        // 2. Optional Rewarded Ad Button (Second Chance)
+                        Button(
+                            onClick = onWatchAdSecondChance,
+                            colors = ButtonDefaults.buttonColors(
+                                containerColor = Color(0xFF1B4332),
+                                contentColor = Color(0xFFD8F3DC)
+                            ),
+                            border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFF52B788)),
+                            shape = RoundedCornerShape(12.dp),
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(38.dp)
+                                .testTag("game_over_watch_ad_button")
+                        ) {
+                            Text(
+                                text = "▶ WATCH AD — SECOND CHANCE",
+                                fontSize = 10.sp,
+                                fontWeight = FontWeight.Bold,
+                                maxLines = 1
+                            )
+                        }
+
+                        // 3. Secondary ROUNDS button
+                        Button(
+                            onClick = onExitToRounds,
+                            colors = ButtonDefaults.buttonColors(
+                                containerColor = Color(0xFF2C190F),
+                                contentColor = Color(0xFFFFD54F)
+                            ),
+                            shape = RoundedCornerShape(12.dp),
+                            border = androidx.compose.foundation.BorderStroke(1.dp, Color(0x60D4AF37)),
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(38.dp)
+                                .testTag("game_over_exit_button")
+                        ) {
+                            Text(
+                                text = "🏆 ROUNDS",
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.Bold,
+                                letterSpacing = 0.5.sp
+                            )
+                        }
+                    }
+                }
+            }
+        }
+    }
+}

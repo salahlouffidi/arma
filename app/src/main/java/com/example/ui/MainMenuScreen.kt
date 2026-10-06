@@ -1,7 +1,5 @@
 package com.example.ui
 
-import androidx.compose.foundation.verticalScroll
-
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.animateFloat
@@ -316,7 +314,7 @@ fun MainMenuScreen(
 }
 
 @Composable
-internal fun HowToPlayDialog(onDismiss: () -> Unit) {
+private fun HowToPlayDialog(onDismiss: () -> Unit) {
     Dialog(onDismissRequest = onDismiss) {
         Surface(
             shape = RoundedCornerShape(20.dp),
@@ -327,9 +325,7 @@ internal fun HowToPlayDialog(onDismiss: () -> Unit) {
                 .padding(vertical = 10.dp)
         ) {
             Column(
-                modifier = Modifier
-                    .verticalScroll(androidx.compose.foundation.rememberScrollState())
-                    .padding(18.dp),
+                modifier = Modifier.padding(18.dp),
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
                 Text(
@@ -371,19 +367,9 @@ internal fun HowToPlayDialog(onDismiss: () -> Unit) {
                         desc = "Rounds 09–16 feature two independent Armadillos. Use your left thumb for Golden and right thumb for Blue to control both simultaneously in single-player mode."
                     )
                     RuleRow(
-                        icon = "🔥",
-                        title = "Combos",
-                        desc = "Eat fruit quickly in a row to build a combo up to x5. Higher combos multiply every point you earn."
-                    )
-                    RuleRow(
-                        icon = "💎",
-                        title = "Rare Power Fruit",
-                        desc = "Glowing fruit appears for a few seconds — chase it! 💎 Diamond +15 · 👑 Golden +25 · 🧲 Magnet pulls fruit to you · 🌈 Rainbow doubles your score · 🛡 Shield blocks one bite · ❄ Freeze slows the snakes."
-                    )
-                    RuleRow(
                         icon = "👑",
-                        title = "16 Worlds to Unlock",
-                        desc = "Clear a round to unlock the next world. Every round is a different place with its own dangers."
+                        title = "All 16 Rounds Available",
+                        desc = "Round 01 through Round 16 are completely unlocked from the start. Jump to any environment immediately!"
                     )
                 }
 
