@@ -225,11 +225,22 @@ object WorldRenderer {
                 }
             }
             StageTheme.JUNGLE -> {
-                // Green light shafts through the canopy
-                for (k in 0 until 4) {
-                    val x = w * (0.18f + k * 0.22f) + sin(t * 0.3f + k) * w * 0.01f
+                // Misty sunlight breaking through a gap in the canopy
+                val gap = Offset(w * 0.58f, h * 0.22f)
+                scope.drawCircle(
+                    brush = Brush.radialGradient(
+                        colors = listOf(Color(0x66FFF59D), Color(0x2269F0AE), Color.Transparent),
+                        center = gap,
+                        radius = h * 0.55f
+                    ),
+                    radius = h * 0.55f,
+                    center = gap
+                )
+                // Green-gold light shafts through the canopy
+                for (k in 0 until 5) {
+                    val x = w * (0.14f + k * 0.19f) + sin(t * 0.3f + k) * w * 0.01f
                     scope.drawLine(
-                        color = pal.glow.copy(alpha = 0.07f + 0.03f * sin(t * 0.7f + k * 1.3f)),
+                        color = (if (k % 2 == 0) Color(0xFFFFF59D) else pal.glow).copy(alpha = 0.08f + 0.04f * sin(t * 0.7f + k * 1.3f)),
                         start = Offset(x, 0f),
                         end = Offset(x - w * 0.12f, h),
                         strokeWidth = w * 0.05f
@@ -387,7 +398,9 @@ object WorldRenderer {
                 scope.drawPath(p, color = pal.far)
             }
             StageTheme.JUNGLE -> {
-                // Canopy domes
+                // Distant misty canopy layer behind the nearer canopy domes
+                val back = ridge(theme, 3, w, h, h * 0.42f, h * 0.16f, 2.1f, 14, true)
+                scope.drawPath(back, color = Color(0xFF1E5A3A))
                 val p = ridge(theme, 0, w, h, h * 0.5f, h * 0.22f, 5.3f, 12, true)
                 scope.drawPath(p, color = pal.far)
             }
@@ -427,6 +440,30 @@ object WorldRenderer {
                             topLeft = Offset(cx + b * w * 0.035f, cy - b % 2 * h * 0.015f),
                             size = Size(w * 0.07f, h * 0.035f)
                         )
+                    }
+                }
+            }
+            StageTheme.JUNGLE -> {
+                // Leaning palm silhouettes with swaying fronds
+                for (k in 0 until 3) {
+                    val baseX = w * (0.12f + k * 0.36f)
+                    val lean = if (k % 2 == 0) 1f else -1f
+                    val topX = baseX + lean * w * 0.05f
+                    val topY = h * (0.36f + (k % 2) * 0.06f)
+                    val trunk = Path()
+                    trunk.moveTo(baseX, h * 0.86f)
+                    trunk.quadraticTo(baseX + lean * w * 0.01f, h * 0.6f, topX, topY)
+                    scope.drawPath(trunk, color = pal.near, style = Stroke(width = w * 0.009f, cap = StrokeCap.Round))
+                    val sway = sin(t * 0.9f + k) * 0.08f
+                    for (f in 0 until 6) {
+                        val a = -2.9f + f * 0.55f + sway
+                        val len = w * (0.07f + (f % 2) * 0.015f)
+                        val ex = topX + cos(a) * len
+                        val ey = topY + sin(a) * len * 0.55f + len * 0.25f
+                        val frond = Path()
+                        frond.moveTo(topX, topY)
+                        frond.quadraticTo(topX + cos(a) * len * 0.6f, topY + sin(a) * len * 0.6f - h * 0.02f, ex, ey)
+                        scope.drawPath(frond, color = pal.near, style = Stroke(width = w * 0.007f, cap = StrokeCap.Round))
                     }
                 }
             }
@@ -497,6 +534,23 @@ object WorldRenderer {
                 for (side in 0..1) {
                     val cx = if (side == 0) 0f else w
                     scope.drawOval(color = pal.near, topLeft = Offset(cx - w * 0.12f, h * 0.78f), size = Size(w * 0.24f, h * 0.28f))
+                }
+                // Broad foreground leaves along the bottom edge, with a few bright flowers
+                for (i in 0 until 9) {
+                    val lx = w * (i / 8f)
+                    val lw = w * 0.07f
+                    val lh = h * (0.09f + (i % 3) * 0.025f)
+                    val tilt = sin(t * 0.8f + i) * w * 0.004f
+                    val leaf = Path()
+                    leaf.moveTo(lx, h)
+                    leaf.quadraticTo(lx - lw * 0.6f + tilt, h - lh * 0.6f, lx + tilt, h - lh)
+                    leaf.quadraticTo(lx + lw * 0.6f + tilt, h - lh * 0.6f, lx, h)
+                    leaf.close()
+                    scope.drawPath(leaf, color = if (i % 2 == 0) Color(0xFF0B3A22) else pal.near)
+                    if (i % 3 == 1) {
+                        scope.drawCircle(color = Color(0xFFFF5252), radius = h * 0.011f, center = Offset(lx + tilt, h - lh - h * 0.006f))
+                        scope.drawCircle(color = Color(0xFFFFEB3B), radius = h * 0.004f, center = Offset(lx + tilt, h - lh - h * 0.006f))
+                    }
                 }
             }
             StageTheme.DESERT -> {

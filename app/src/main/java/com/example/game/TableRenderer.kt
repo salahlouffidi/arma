@@ -2039,7 +2039,7 @@ object TableRenderer {
     }
 
     /**
-     * Combo badge that floats just above the armadillo (instead of occupying the HUD).
+     * Combo badge that floats just below the armadillo (instead of occupying the HUD).
      * Escalates in colour and glow with the multiplier; gently pulses.
      */
     fun drawComboBadge(
@@ -2057,7 +2057,9 @@ object TableRenderer {
             else -> Color(0xFFFFD700)
         }
         val pulse = 1f + 0.06f * sin(time * 9f)
-        val y = center.y - 54f
+        // Sits BELOW the armadillo: "+N" score labels rise upward from eaten fruit, so the
+        // badge never collides with them.
+        val y = center.y + 56f
         if (multiplier >= 5) {
             scope.drawCircle(
                 brush = Brush.radialGradient(listOf(Color(0x66FFD700), Color.Transparent), center = Offset(center.x, y), radius = 46f),

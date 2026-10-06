@@ -97,9 +97,10 @@ fun ConsoleHomeScreen(
             val w = size.width
             val h = size.height
 
-            // Snake in the distance, slithering across the right side
-            val sx = w * 0.76f + sin(t * 0.3f) * w * 0.07f
-            val sy = h * 0.70f + cos(t * 0.45f) * h * 0.015f
+            // Snake in the distance, slithering in the open ground between the title and the
+            // menu (kept clear of the menu column so it never sits behind a button)
+            val sx = w * 0.40f + sin(t * 0.3f) * w * 0.05f
+            val sy = h * 0.66f + cos(t * 0.45f) * h * 0.015f
             val sDir = cos(t * 0.3f)
             val sAngle = if (sDir >= 0f) 0f else Math.PI.toFloat()
             val back = if (sDir >= 0f) -1f else 1f
@@ -113,7 +114,7 @@ fun ConsoleHomeScreen(
                 slitherPhase = t * 7.5f,
                 tongueVisible = (t % 2.5f) < 0.45f
             )
-            withTransform({ scale(0.8f, 0.8f, Offset(sx, sy)) }) {
+            withTransform({ scale(0.7f, 0.7f, Offset(sx, sy)) }) {
                 TableRenderer.drawSnake(this, snake, Offset.Zero)
             }
 

@@ -134,8 +134,10 @@ fun RoundLibraryScreen(
             .testTag("round_select_screen")
     ) {
         val density = androidx.compose.ui.platform.LocalDensity.current
-        val cardH = maxHeight * 0.58f
-        val cardW = minOf(cardH.value * 1.34f, maxWidth.value * 0.52f).dp
+        // Card band sits between the top bar (~60dp) and the bottom action bar (~88dp) so the
+        // focused card never overlaps the PLAY button, even on short landscape phones.
+        val cardH = minOf(maxHeight.value * 0.56f, maxHeight.value - 160f).coerceAtLeast(150f).dp
+        val cardW = minOf(cardH.value * 1.42f, maxWidth.value * 0.52f).dp
         val spacingPx = with(density) { (cardW * 0.74f).toPx() }
 
         // 1. Full-screen world preview of the focused round (crossfades on focus change)
@@ -209,7 +211,7 @@ fun RoundLibraryScreen(
         Box(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(top = 30.dp)
+                .padding(top = 60.dp, bottom = 88.dp)
                 .pointerInput(filter, spacingPx) {
                     detectHorizontalDragGestures(
                         onDragEnd = {
@@ -452,7 +454,7 @@ private fun RoundCard(
                 text = stage.name.uppercase(),
                 style = TextStyle(
                     brush = if (unlocked) ArmaUi.TitleBrush else Brush.verticalGradient(listOf(Color(0xFFBDBDBD), Color(0xFF757575))),
-                    fontSize = 28.sp,
+                    fontSize = 26.sp,
                     fontWeight = FontWeight.Black,
                     letterSpacing = 1.sp,
                     shadow = Shadow(color = Color(0xCC000000), offset = Offset(0f, 3f), blurRadius = 10f)
@@ -460,41 +462,42 @@ private fun RoundCard(
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis
             )
-            Text(
-                text = "${stage.icon}  ${stage.subtitle}",
-                color = ArmaUi.TextSecondary,
-                fontSize = 11.sp,
-                fontWeight = FontWeight.SemiBold,
-                maxLines = 1
-            )
-            VSpace(8.dp)
+            // Subtitle + difficulty on one line
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Column {
-                    SectionLabel(text = "DIFFICULTY")
-                    VSpace(4.dp)
-                    DifficultyMeter(level = stage.difficultyLevel(), accent = accent)
-                }
-                HSpace(18.dp)
-                StatBlock(label = "TARGET", value = "${stage.targetFruits} FRUIT")
-                HSpace(18.dp)
+                Text(
+                    text = "${stage.icon}  ${stage.subtitle}",
+                    color = ArmaUi.TextSecondary,
+                    fontSize = 11.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.weight(1f)
+                )
+                HSpace(10.dp)
+                DifficultyMeter(level = stage.difficultyLevel(), accent = accent)
+            }
+            VSpace(8.dp)
+            // Compact stats row: fits the narrowest card without wrapping
+            Row(verticalAlignment = Alignment.Bottom, modifier = Modifier.fillMaxWidth()) {
+                StatBlock(label = "TARGET", value = "${stage.targetFruits} \uD83C\uDF4E")
+                HSpace(16.dp)
                 StatBlock(label = "BEST", value = if (bestScore > 0) "%,d".format(bestScore) else "—", valueColor = ArmaUi.Gold)
-                HSpace(18.dp)
+                HSpace(16.dp)
                 StatBlock(label = "LIVES", value = "${stage.maxAllowedLosses}")
+                Box(modifier = Modifier.weight(1f))
                 if (isFocused && onSettings != null) {
-                    HSpace(14.dp)
                     Box(
                         modifier = Modifier
                             .glassPanel(radius = 12.dp)
                             .consoleTap(onClick = onSettings)
-                            .padding(horizontal = 10.dp, vertical = 6.dp)
+                            .padding(horizontal = 9.dp, vertical = 6.dp)
                             .testTag("round_${stage.id}_settings")
                     ) {
                         Text(
-                            text = if (joystickRight) "⚙ STICK ▶" else "⚙ ◀ STICK",
+                            text = if (joystickRight) "\u2699 \u25B6" else "\u2699 \u25C0",
                             color = ArmaUi.TextSecondary,
-                            fontSize = 9.sp,
-                            fontWeight = FontWeight.Black,
-                            letterSpacing = 1.sp
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.Black
                         )
                     }
                 }

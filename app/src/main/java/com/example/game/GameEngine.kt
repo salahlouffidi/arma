@@ -2068,6 +2068,7 @@ class GameEngine(
      * per-armadillo effect the caller should apply.
      */
     private fun applyFruitPickup(apple: AppleItem): FruitEffect {
+        val prevCm = comboMultiplier()
         comboCount++
         comboTimer = COMBO_WINDOW
         val multiplier = comboMultiplier() * (if (scoreMultiplierTimer > 0f) 2 else 1)
@@ -2080,8 +2081,9 @@ class GameEngine(
 
         spawnFloatingText("+$gained", apple.pos, fruitAccentColor(apple.fruitType), sizeSp = if (gained >= 10) 22f else 16f)
         val cm = comboMultiplier()
-        if (cm >= 2) {
-            spawnFloatingText("x$cm COMBO", apple.pos + Vector2(0f, -20f), Color(0xFFFFEA00), sizeSp = 13f, riseSpeed = -34f)
+        // Only announce a NEW combo level; the persistent badge under the player shows the rest.
+        if (cm >= 2 && cm > prevCm) {
+            spawnFloatingText("x$cm COMBO", apple.pos + Vector2(0f, -30f), Color(0xFFFFEA00), sizeSp = 13f, riseSpeed = -34f)
         }
         if (cm > bestComboMultiplier) bestComboMultiplier = cm
         if (comboCount == 2 || comboCount == 4 || comboCount == 6 || comboCount == 8) {
