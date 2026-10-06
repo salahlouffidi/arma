@@ -1,6 +1,6 @@
 {
-  "name": "Armadillo Escape",
-  "description": "Fast-paced arcade action game where you guide a rolling armadillo to collect juicy desert fruits, dodge hazardous cacti and snakes, trigger overdrive frenzy, and survive high-speed stages!",
+  "name": "ARMASNAKE",
+  "description": "ARMASNAKE — LOUFFI EDITION: 3D physical board game featuring 16 unlocked rounds, solo armadillo and dual-armadillo mechanics, predator snakes, virtual joysticks, and rich arcade audio.",
   "requestFramePermissions": [],
   "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
 }

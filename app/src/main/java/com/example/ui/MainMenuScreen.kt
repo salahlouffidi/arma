@@ -1,13 +1,15 @@
 package com.example.ui
 
-import androidx.compose.animation.core.Animatable
-import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.foundation.verticalScroll
+
+import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -21,31 +23,25 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.lazy.LazyRow
-import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Settings
-import androidx.compose.material.icons.filled.Star
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.testTag
@@ -53,28 +49,30 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.example.game.GameEngine
-import com.example.game.GameMode
-import com.example.game.HapticHelper
+import androidx.compose.ui.window.Dialog
 import com.example.game.SoundManager
 
 @Composable
 fun MainMenuScreen(
-    engine: GameEngine,
+    currentStageId: Int,
     soundManager: SoundManager,
-    hapticHelper: HapticHelper,
-    onStartGame: (GameMode, Int) -> Unit
+    onStartGame: (stageId: Int) -> Unit,
+    onOpenStageSelect: () -> Unit,
+    onOpenAudioSettings: () -> Unit,
+    onOpenGameModeSelect: () -> Unit = onOpenStageSelect
 ) {
-    val playPulse = remember { Animatable(1f) }
-    LaunchedEffect(Unit) {
-        playPulse.animateTo(
-            targetValue = 1.05f,
-            animationSpec = infiniteRepeatable(
-                animation = tween(800, easing = FastOutSlowInEasing),
-                repeatMode = RepeatMode.Reverse
-            )
-        )
-    }
+    var showHowToPlay by remember { mutableStateOf(false) }
+
+    val infiniteTransition = rememberInfiniteTransition(label = "pulse")
+    val bannerGlow by infiniteTransition.animateFloat(
+        initialValue = 0.8f,
+        targetValue = 1.05f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(1200, easing = LinearEasing),
+            repeatMode = RepeatMode.Reverse
+        ),
+        label = "glow"
+    )
 
     Box(
         modifier = Modifier
@@ -83,268 +81,353 @@ fun MainMenuScreen(
                 Brush.verticalGradient(
                     colors = listOf(
                         Color(0xFF261208),
-                        Color(0xFF3E1F0B),
-                        Color(0xFF190C04)
+                        Color(0xFF190C05),
+                        Color(0xFF0F0703)
                     )
                 )
             )
+            .statusBarsPadding()
+            .navigationBarsPadding()
+            .testTag("main_menu_screen"),
+        contentAlignment = Alignment.Center
     ) {
         Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .statusBarsPadding()
-                .navigationBarsPadding()
-                .verticalScroll(rememberScrollState())
-                .padding(24.dp),
-            horizontalAlignment = Alignment.CenterHorizontally
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.Center,
+            modifier = Modifier.padding(horizontal = 24.dp, vertical = 12.dp)
         ) {
             Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.End,
-                verticalAlignment = Alignment.CenterVertically
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.Center
             ) {
-                IconButton(
-                    onClick = { soundManager.isSoundEnabled = !soundManager.isSoundEnabled },
-                    modifier = Modifier
-                        .size(44.dp)
-                        .clip(CircleShape)
-                        .background(Color(0x33FFFFFF))
-                        .testTag("sound_toggle_button")
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.Settings,
-                        contentDescription = "Toggle Sound",
-                        tint = if (soundManager.isSoundEnabled) Color(0xFFFFB74D) else Color.Gray
-                    )
-                }
-
+                Text(text = "🦔", fontSize = 36.sp)
                 Spacer(modifier = Modifier.width(8.dp))
-
-                IconButton(
-                    onClick = { hapticHelper.isHapticsEnabled = !hapticHelper.isHapticsEnabled },
-                    modifier = Modifier
-                        .size(44.dp)
-                        .clip(CircleShape)
-                        .background(Color(0x33FFFFFF))
-                        .testTag("haptic_toggle_button")
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.Star,
-                        contentDescription = "Toggle Haptics",
-                        tint = if (hapticHelper.isHapticsEnabled) Color(0xFFFFB74D) else Color.Gray
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    Text(
+                        text = "ARMASNAKE",
+                        color = Color(0xFFFFD700),
+                        fontSize = 32.sp,
+                        fontWeight = FontWeight.Black,
+                        letterSpacing = 2.5.sp
+                    )
+                    Text(
+                        text = "LOUFFI EDITION",
+                        color = Color(0xFFFF8F00),
+                        fontSize = 13.sp,
+                        fontWeight = FontWeight.ExtraBold,
+                        letterSpacing = 2.sp
                     )
                 }
+                Spacer(modifier = Modifier.width(8.dp))
+                Text(text = "🐍", fontSize = 36.sp)
+            }
+
+            Spacer(modifier = Modifier.height(8.dp))
+
+            Surface(
+                color = Color(0xFF3E1F0C),
+                shape = RoundedCornerShape(12.dp),
+                border = BorderStroke(1.dp, Color(0xFFD4AF37))
+            ) {
+                Text(
+                    text = "🏆 16-ROUND CAMPAIGN • SOLO",
+                    color = Color(0xFFFFE082),
+                    fontSize = 11.sp,
+                    fontWeight = FontWeight.Bold,
+                    letterSpacing = 0.5.sp,
+                    modifier = Modifier.padding(horizontal = 14.dp, vertical = 5.dp)
+                )
             }
 
             Spacer(modifier = Modifier.height(16.dp))
 
-            Surface(
-                color = Color(0xFFFF6F00),
-                shape = RoundedCornerShape(20.dp),
-                shadowElevation = 8.dp
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(12.dp),
+                verticalAlignment = Alignment.CenterVertically
             ) {
-                Text(
-                    text = "★ LOUFFI ARCADE EDITION ★",
-                    color = Color.White,
-                    fontWeight = FontWeight.Black,
-                    fontSize = 12.sp,
-                    letterSpacing = 1.2.sp,
-                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 6.dp)
-                )
-            }
-
-            Spacer(modifier = Modifier.height(14.dp))
-
-            Text(
-                text = "ARMADILLO\nESCAPE",
-                color = Color(0xFFFFB74D),
-                fontSize = 42.sp,
-                fontWeight = FontWeight.Black,
-                textAlign = TextAlign.Center,
-                lineHeight = 46.sp,
-                letterSpacing = 1.sp
-            )
-
-            Text(
-                text = "Roll • Dodge • Frenzy",
-                color = Color(0xFFFFCC80),
-                fontSize = 16.sp,
-                fontWeight = FontWeight.Medium,
-                modifier = Modifier.padding(top = 8.dp)
-            )
-
-            Spacer(modifier = Modifier.height(28.dp))
-
-            Card(
-                modifier = Modifier.fillMaxWidth(),
-                colors = CardDefaults.cardColors(containerColor = Color(0x33FFFFFF)),
-                shape = RoundedCornerShape(18.dp)
-            ) {
-                Row(
+                Button(
+                    onClick = {
+                        soundManager.playMenuClick()
+                        onOpenGameModeSelect()
+                    },
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = Color(0xFFD4AF37),
+                        contentColor = Color(0xFF1F0D03)
+                    ),
+                    shape = RoundedCornerShape(14.dp),
+                    elevation = ButtonDefaults.buttonElevation(defaultElevation = 6.dp),
                     modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(16.dp),
-                    verticalAlignment = Alignment.CenterVertically
+                        .height(46.dp)
+                        .testTag("menu_play_button")
                 ) {
                     Icon(
-                        imageVector = Icons.Default.Star,
-                        contentDescription = "High Score",
-                        tint = Color(0xFFFFD54F),
-                        modifier = Modifier.size(36.dp)
+                        imageVector = Icons.Default.PlayArrow,
+                        contentDescription = null,
+                        modifier = Modifier.size(20.dp)
                     )
-                    Spacer(modifier = Modifier.width(16.dp))
-                    Column {
-                        Text(
-                            text = "BEST RECORD",
-                            color = Color(0xFFFFCC80),
-                            fontSize = 12.sp,
-                            fontWeight = FontWeight.Bold
-                        )
-                        Text(
-                            text = "${engine.highScore} PTS",
-                            color = Color.White,
-                            fontSize = 24.sp,
-                            fontWeight = FontWeight.Black
-                        )
-                    }
+                    Spacer(modifier = Modifier.width(6.dp))
+                    Text(
+                        text = "PLAY SOLO",
+                        fontSize = 13.sp,
+                        fontWeight = FontWeight.Black,
+                        letterSpacing = 0.5.sp
+                    )
+                }
+
+                Button(
+                    onClick = {
+                        soundManager.playMenuClick()
+                        onOpenStageSelect()
+                    },
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = Color(0xFF3E2312),
+                        contentColor = Color(0xFFFFD54F)
+                    ),
+                    shape = RoundedCornerShape(14.dp),
+                    border = BorderStroke(1.5.dp, Color(0xFFD4AF37)),
+                    modifier = Modifier
+                        .height(46.dp)
+                        .testTag("menu_round_select_button")
+                ) {
+                    Text(
+                        text = "🏆 SELECT ROUND (1–16)",
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.ExtraBold
+                    )
                 }
             }
 
-            Spacer(modifier = Modifier.height(28.dp))
+            Spacer(modifier = Modifier.height(12.dp))
 
-            Button(
-                onClick = { onStartGame(engine.currentMode, engine.currentStage) },
-                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFFF9800)),
-                shape = RoundedCornerShape(24.dp),
-                elevation = ButtonDefaults.buttonElevation(defaultElevation = 8.dp),
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(64.dp)
-                    .scale(playPulse.value)
-                    .testTag("play_game_button")
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(10.dp),
+                verticalAlignment = Alignment.CenterVertically
             ) {
-                Icon(
-                    imageVector = Icons.Default.PlayArrow,
-                    contentDescription = null,
-                    tint = Color.Black,
-                    modifier = Modifier.size(32.dp)
-                )
-                Spacer(modifier = Modifier.width(8.dp))
-                Text(
-                    text = "ROLL TO ESCAPE!",
-                    color = Color.Black,
-                    fontSize = 20.sp,
-                    fontWeight = FontWeight.Black,
-                    letterSpacing = 0.5.sp
-                )
+                Button(
+                    onClick = {
+                        soundManager.playMenuClick()
+                        onOpenAudioSettings()
+                    },
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = Color(0xFF261408),
+                        contentColor = Color(0xFFFFE0B2)
+                    ),
+                    shape = RoundedCornerShape(12.dp),
+                    border = BorderStroke(1.dp, Color(0x60D4AF37)),
+                    modifier = Modifier
+                        .height(38.dp)
+                        .testTag("menu_audio_settings_button")
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Settings,
+                        contentDescription = null,
+                        modifier = Modifier.size(16.dp),
+                        tint = Color(0xFFFFD54F)
+                    )
+                    Spacer(modifier = Modifier.width(6.dp))
+                    Text(
+                        text = "AUDIO SETTINGS",
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
+
+                Button(
+                    onClick = {
+                        soundManager.playMenuClick()
+                        showHowToPlay = true
+                    },
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = Color(0xFF261408),
+                        contentColor = Color(0xFFFFE0B2)
+                    ),
+                    shape = RoundedCornerShape(12.dp),
+                    border = BorderStroke(1.dp, Color(0x6081C784)),
+                    modifier = Modifier
+                        .height(38.dp)
+                        .testTag("menu_how_to_play_button")
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Info,
+                        contentDescription = null,
+                        modifier = Modifier.size(16.dp),
+                        tint = Color(0xFF81C784)
+                    )
+                    Spacer(modifier = Modifier.width(6.dp))
+                    Text(
+                        text = "RULES & OVERDRIVE",
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
             }
 
-            Spacer(modifier = Modifier.height(32.dp))
+            Spacer(modifier = Modifier.height(12.dp))
 
-            Text(
-                text = "SELECT GAME MODE",
-                color = Color(0xFFFFCC80),
-                fontSize = 13.sp,
-                fontWeight = FontWeight.Bold,
-                modifier = Modifier.fillMaxWidth()
-            )
-            Spacer(modifier = Modifier.height(10.dp))
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Surface(
+                    color = Color(0x40000000),
+                    shape = RoundedCornerShape(8.dp),
+                    border = BorderStroke(0.5.dp, Color(0x30FFFFFF))
+                ) {
+                    Text(
+                        text = "🕹️ Virtual Joystick",
+                        color = Color(0xFFBCAAA4),
+                        fontSize = 10.sp,
+                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+                    )
+                }
 
-            for (mode in GameMode.values()) {
-                val isSelected = engine.currentMode == mode
-                Card(
+                Surface(
+                    color = Color(0x40000000),
+                    shape = RoundedCornerShape(8.dp),
+                    border = BorderStroke(0.5.dp, Color(0x30FFFFFF))
+                ) {
+                    Text(
+                        text = "⚡ OVERDRIVE Power Shield",
+                        color = Color(0xFFFFD54F),
+                        fontSize = 10.sp,
+                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+                    )
+                }
+
+                Surface(
+                    color = Color(0x40000000),
+                    shape = RoundedCornerShape(8.dp),
+                    border = BorderStroke(0.5.dp, Color(0x30FFFFFF))
+                ) {
+                    Text(
+                        text = "🍎 4-Fruit Scatter Chase",
+                        color = Color(0xFFFF8A65),
+                        fontSize = 10.sp,
+                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+                    )
+                }
+            }
+        }
+
+        if (showHowToPlay) {
+            HowToPlayDialog(onDismiss = { showHowToPlay = false })
+        }
+    }
+}
+
+@Composable
+internal fun HowToPlayDialog(onDismiss: () -> Unit) {
+    Dialog(onDismissRequest = onDismiss) {
+        Surface(
+            shape = RoundedCornerShape(20.dp),
+            color = Color(0xFF1D1007),
+            border = BorderStroke(2.dp, Color(0xFFD4AF37)),
+            modifier = Modifier
+                .fillMaxWidth(0.95f)
+                .padding(vertical = 10.dp)
+        ) {
+            Column(
+                modifier = Modifier
+                    .verticalScroll(androidx.compose.foundation.rememberScrollState())
+                    .padding(18.dp),
+                horizontalAlignment = Alignment.CenterHorizontally
+            ) {
+                Text(
+                    text = "📖 HOW TO PLAY — ARMASNAKE",
+                    color = Color(0xFFFFD700),
+                    fontSize = 16.sp,
+                    fontWeight = FontWeight.Bold
+                )
+
+                Spacer(modifier = Modifier.height(10.dp))
+
+                Column(
+                    verticalArrangement = Arrangement.spacedBy(8.dp),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    RuleRow(
+                        icon = "🕹️",
+                        title = "Virtual Joystick Control",
+                        desc = "Press and drag the on-screen joystick to roll the Armadillo across the arena. 360° and diagonal movement fully supported!"
+                    )
+                    RuleRow(
+                        icon = "🍎",
+                        title = "Fruit Collection & Events",
+                        desc = "Collect fruits to gain points. Every 4 fruits triggers a 4-fruit bouncing scatter chase event!"
+                    )
+                    RuleRow(
+                        icon = "⚡",
+                        title = "OVERDRIVE Ability",
+                        desc = "Catching the Star Fruit activates OVERDRIVE, granting super speed, agility, and protection!"
+                    )
+                    RuleRow(
+                        icon = "🛡️",
+                        title = "Snake Shield Protection",
+                        desc = "If the snake strikes while OVERDRIVE is active, the Armadillo survives. The shield absorbs the blow, 1 point is lost, and play continues."
+                    )
+                    RuleRow(
+                        icon = "🔵",
+                        title = "Dual Armadillo Rounds 09–16",
+                        desc = "Rounds 09–16 feature two independent Armadillos. Use your left thumb for Golden and right thumb for Blue to control both simultaneously in single-player mode."
+                    )
+                    RuleRow(
+                        icon = "🔥",
+                        title = "Combos",
+                        desc = "Eat fruit quickly in a row to build a combo up to x5. Higher combos multiply every point you earn."
+                    )
+                    RuleRow(
+                        icon = "💎",
+                        title = "Rare Power Fruit",
+                        desc = "Glowing fruit appears for a few seconds — chase it! 💎 Diamond +15 · 👑 Golden +25 · 🧲 Magnet pulls fruit to you · 🌈 Rainbow doubles your score · 🛡 Shield blocks one bite · ❄ Freeze slows the snakes."
+                    )
+                    RuleRow(
+                        icon = "👑",
+                        title = "16 Worlds to Unlock",
+                        desc = "Clear a round to unlock the next world. Every round is a different place with its own dangers."
+                    )
+                }
+
+                Spacer(modifier = Modifier.height(14.dp))
+
+                Button(
+                    onClick = onDismiss,
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = Color(0xFFD4AF37),
+                        contentColor = Color(0xFF1B0E05)
+                    ),
+                    shape = RoundedCornerShape(12.dp),
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(vertical = 4.dp)
-                        .clip(RoundedCornerShape(14.dp))
-                        .clickable { engine.currentMode = mode }
-                        .border(
-                            width = if (isSelected) 2.dp else 1.dp,
-                            color = if (isSelected) Color(0xFFFF9800) else Color(0x22FFFFFF),
-                            shape = RoundedCornerShape(14.dp)
-                        ),
-                    colors = CardDefaults.cardColors(
-                        containerColor = if (isSelected) Color(0x33FF9800) else Color(0x22000000)
-                    )
+                        .height(38.dp)
                 ) {
-                    Column(modifier = Modifier.padding(14.dp)) {
-                        Text(
-                            text = mode.displayName,
-                            color = if (isSelected) Color(0xFFFFD54F) else Color.White,
-                            fontSize = 16.sp,
-                            fontWeight = FontWeight.Bold
-                        )
-                        Spacer(modifier = Modifier.height(2.dp))
-                        Text(
-                            text = mode.description,
-                            color = Color(0xAAFFFFFF),
-                            fontSize = 13.sp
-                        )
-                    }
+                    Text(text = "GOT IT, LET'S ROLL!", fontSize = 12.sp, fontWeight = FontWeight.Bold)
                 }
             }
+        }
+    }
+}
 
-            Spacer(modifier = Modifier.height(28.dp))
-
+@Composable
+private fun RuleRow(icon: String, title: String, desc: String) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        verticalAlignment = Alignment.Top
+    ) {
+        Text(text = icon, fontSize = 18.sp)
+        Spacer(modifier = Modifier.width(8.dp))
+        Column {
             Text(
-                text = "STAGE SELECT",
-                color = Color(0xFFFFCC80),
-                fontSize = 13.sp,
-                fontWeight = FontWeight.Bold,
-                modifier = Modifier.fillMaxWidth()
+                text = title,
+                color = Color(0xFFFFE082),
+                fontSize = 12.sp,
+                fontWeight = FontWeight.Bold
             )
-            Spacer(modifier = Modifier.height(10.dp))
-
-            LazyRow(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(12.dp)
-            ) {
-                items(engine.stages) { stage ->
-                    val isSelected = engine.currentStage == stage.stageNumber
-                    Card(
-                        modifier = Modifier
-                            .width(140.dp)
-                            .clip(RoundedCornerShape(14.dp))
-                            .clickable { engine.currentStage = stage.stageNumber }
-                            .border(
-                                width = if (isSelected) 2.dp else 1.dp,
-                                color = if (isSelected) Color(0xFFFF9800) else Color(0x22FFFFFF),
-                                shape = RoundedCornerShape(14.dp)
-                            ),
-                        colors = CardDefaults.cardColors(
-                            containerColor = if (isSelected) Color(0x44FF9800) else Color(0x22000000)
-                        )
-                    ) {
-                        Column(
-                            modifier = Modifier.padding(12.dp),
-                            horizontalAlignment = Alignment.CenterHorizontally
-                        ) {
-                            Text(
-                                text = "STAGE ${stage.stageNumber}",
-                                color = Color(0xFFFFB74D),
-                                fontSize = 12.sp,
-                                fontWeight = FontWeight.Black
-                            )
-                            Spacer(modifier = Modifier.height(4.dp))
-                            Text(
-                                text = stage.name,
-                                color = Color.White,
-                                fontSize = 13.sp,
-                                fontWeight = FontWeight.Bold,
-                                textAlign = TextAlign.Center
-                            )
-                            Spacer(modifier = Modifier.height(4.dp))
-                            Text(
-                                text = "Goal: ${stage.targetScore}",
-                                color = Color(0x88FFFFFF),
-                                fontSize = 11.sp
-                            )
-                        }
-                    }
-                }
-            }
-
-            Spacer(modifier = Modifier.height(24.dp))
+            Text(
+                text = desc,
+                color = Color(0xFFD7CCC8),
+                fontSize = 10.sp,
+                lineHeight = 13.sp
+            )
         }
     }
 }

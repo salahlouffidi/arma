@@ -1,103 +1,129 @@
 package com.example
 
+import android.app.PictureInPictureParams
+import android.content.pm.ActivityInfo
+import android.content.pm.PackageManager
+import android.content.res.Configuration
+import android.os.Build
 import android.os.Bundle
+import android.util.Rational
 import androidx.activity.ComponentActivity
-import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.runtime.Composable
+import androidx.compose.material3.Surface
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
-import com.example.game.GameEngine
-import com.example.game.HapticHelper
-import com.example.game.ScreenState
-import com.example.game.SoundManager
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalLayoutDirection
+import androidx.compose.ui.unit.LayoutDirection
+import androidx.lifecycle.lifecycleScope
+import com.example.ads.AdManager
 import com.example.ui.ArmadilloEscapeScreen
-import com.example.ui.GameOverDialog
-import com.example.ui.MainMenuScreen
-import com.example.ui.PauseOverlay
-import com.example.ui.StageCompleteDialog
 import com.example.ui.theme.ArmadilloEscapeTheme
+import com.google.android.gms.ads.MobileAds
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
 
 class MainActivity : ComponentActivity() {
+    private var isInPipMode by mutableStateOf(false)
+    private var isGameplayActive by mutableStateOf(false)
+    private lateinit var adManager: AdManager
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        // Strictly lock the visual game screen to fixed landscape orientation
+        requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE
         enableEdgeToEdge()
 
-        val soundManager = SoundManager()
-        val hapticHelper = HapticHelper(this)
-        val gameEngine = GameEngine(soundManager, hapticHelper)
+        adManager = AdManager(applicationContext)
+        lifecycleScope.launch(Dispatchers.IO) {
+            try {
+                MobileAds.initialize(this@MainActivity) {
+                    adManager.preload()
+                }
+            } catch (t: Throwable) {
+                // Safely handle environments without Google Play Services or AdServices
+            }
+        }
 
         setContent {
             ArmadilloEscapeTheme {
-                ArmadilloEscapeApp(
-                    engine = gameEngine,
-                    soundManager = soundManager,
-                    hapticHelper = hapticHelper
-                )
-            }
-        }
-    }
-}
-
-@Composable
-fun ArmadilloEscapeApp(
-    engine: GameEngine,
-    soundManager: SoundManager,
-    hapticHelper: HapticHelper
-) {
-    BackHandler(enabled = engine.screenState != ScreenState.MENU) {
-        when (engine.screenState) {
-            ScreenState.PLAYING -> engine.pauseGame()
-            ScreenState.PAUSED -> engine.screenState = ScreenState.MENU
-            ScreenState.GAME_OVER, ScreenState.STAGE_CLEAR -> engine.screenState = ScreenState.MENU
-            ScreenState.MENU -> {}
-        }
-    }
-
-    Box(modifier = Modifier.fillMaxSize()) {
-        when (engine.screenState) {
-            ScreenState.MENU -> {
-                MainMenuScreen(
-                    engine = engine,
-                    soundManager = soundManager,
-                    hapticHelper = hapticHelper,
-                    onStartGame = { mode, stage ->
-                        engine.startNewGame(mode, stage)
+                CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Ltr) {
+                    Surface(
+                        modifier = Modifier.fillMaxSize(),
+                        color = Color(0xFF140D08)
+                    ) {
+                        ArmadilloEscapeScreen(
+                            isInPip = isInPipMode,
+                            onEnterPip = { enterPip() },
+                            onSetGameplayActive = { updatePipParams(it) },
+                            adManager = adManager
+                        )
                     }
-                )
-            }
-            ScreenState.PLAYING -> {
-                ArmadilloEscapeScreen(engine = engine)
-            }
-            ScreenState.PAUSED -> {
-                ArmadilloEscapeScreen(engine = engine)
-                PauseOverlay(
-                    engine = engine,
-                    soundManager = soundManager,
-                    hapticHelper = hapticHelper,
-                    onResume = { engine.resumeGame() },
-                    onRestart = { engine.startNewGame(engine.currentMode, engine.currentStage) },
-                    onMainMenu = { engine.screenState = ScreenState.MENU }
-                )
-            }
-            ScreenState.GAME_OVER -> {
-                ArmadilloEscapeScreen(engine = engine)
-                GameOverDialog(
-                    engine = engine,
-                    onRestart = { engine.startNewGame(engine.currentMode, engine.currentStage) },
-                    onMainMenu = { engine.screenState = ScreenState.MENU }
-                )
-            }
-            ScreenState.STAGE_CLEAR -> {
-                ArmadilloEscapeScreen(engine = engine)
-                StageCompleteDialog(
-                    engine = engine,
-                    onNextStage = { engine.nextStage() },
-                    onMainMenu = { engine.screenState = ScreenState.MENU }
-                )
+                }
             }
         }
+    }
+
+    fun enterPip() {
+        if (!packageManager.hasSystemFeature(PackageManager.FEATURE_PICTURE_IN_PICTURE)) return
+        try {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                val builder = PictureInPictureParams.Builder()
+                    .setAspectRatio(Rational(16, 9))
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                    builder.setAutoEnterEnabled(true)
+                }
+                enterPictureInPictureMode(builder.build())
+            } else {
+                @Suppress("DEPRECATION")
+                enterPictureInPictureMode()
+            }
+        } catch (e: Exception) {
+            // Safely handled
+        }
+    }
+
+    private fun updatePipParams(active: Boolean) {
+        isGameplayActive = active
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S &&
+            packageManager.hasSystemFeature(PackageManager.FEATURE_PICTURE_IN_PICTURE)
+        ) {
+            try {
+                val params = PictureInPictureParams.Builder()
+                    .setAspectRatio(Rational(16, 9))
+                    .setAutoEnterEnabled(active)
+                    .build()
+                setPictureInPictureParams(params)
+            } catch (e: Exception) {
+                // Safely handled
+            }
+        }
+    }
+
+    override fun onUserLeaveHint() {
+        super.onUserLeaveHint()
+        if (isGameplayActive && packageManager.hasSystemFeature(PackageManager.FEATURE_PICTURE_IN_PICTURE)) {
+            enterPip()
+        }
+    }
+
+    @Suppress("DEPRECATION")
+    override fun onPictureInPictureModeChanged(
+        isInPictureInPictureMode: Boolean,
+        newConfig: Configuration
+    ) {
+        super.onPictureInPictureModeChanged(isInPictureInPictureMode, newConfig)
+        isInPipMode = isInPictureInPictureMode
+    }
+
+    override fun onConfigurationChanged(newConfig: Configuration) {
+        super.onConfigurationChanged(newConfig)
+        // Ensure orientation remains locked to landscape across system configuration changes
+        requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE
     }
 }
