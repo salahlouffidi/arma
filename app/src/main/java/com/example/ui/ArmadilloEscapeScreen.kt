@@ -260,6 +260,20 @@ fun ArmadilloEscapeScreen(
             },
             onArmadilloSpawned = {
                 soundManager.playNewArmadilloSpawned()
+            },
+            onPowerUpCollected = {
+                haptics.powerUp()
+                soundManager.playPowerActivated()
+            },
+            onBonusFruit = {
+                haptics.specialFruit()
+            },
+            onComboMilestone = { level ->
+                haptics.combo(level - 1)
+            },
+            onSurprise = {
+                haptics.surprise()
+                soundManager.playSpecialFruitActivated()
             }
         ).apply {
             onStageCompleted = { stage, score, fruits, lost, time ->
@@ -822,6 +836,7 @@ fun ArmadilloEscapeScreen(
             double = gameEngine.doubleTimer,
             combo = gameEngine.comboCount,
             comboTimer = gameEngine.comboTimer,
+            frenzy = gameEngine.frenzyTimer,
             modifier = Modifier.align(Alignment.TopCenter).padding(top = 50.dp)
         )
 
@@ -1660,7 +1675,7 @@ private fun StageClearDialog(
                             .height(36.dp)
                             .testTag("retry_stage_button")
                     ) {
-                        Text(text = "↺ RETRY ROUND", fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                        Text(text = "RETRY ROUND", fontSize = 11.sp, fontWeight = FontWeight.Bold)
                     }
 
                     ProStyledButton(
@@ -1893,7 +1908,7 @@ private fun GameOverDialog(
                                 .testTag("game_over_retry_button")
                         ) {
                             Text(
-                                text = "↻ RETRY",
+                                text = "RETRY",
                                 fontSize = 13.sp,
                                 fontWeight = FontWeight.Black,
                                 letterSpacing = 0.5.sp
@@ -1965,10 +1980,12 @@ private fun IoStatusStrip(
     double: Float,
     combo: Int,
     comboTimer: Float,
+    frenzy: Float = 0f,
     modifier: Modifier = Modifier
 ) {
     @Suppress("UNUSED_VARIABLE") val t = tick
     Row(modifier = modifier, horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
+        if (frenzy > 0f) ProChip("SNAKE FRENZY ${frenzy.toInt() + 1}s", color = Color(0xFFFF5252), filled = true)
         if (magnet > 0f) ProChip("MAGNET ${magnet.toInt() + 1}s", color = Color(0xFFFF6E6E), filled = true)
         if (freeze > 0f) ProChip("FREEZE ${freeze.toInt() + 1}s", color = Color(0xFF80D8FF), filled = true)
         if (double > 0f) ProChip("x2 POINTS ${double.toInt() + 1}s", color = Color(0xFFFFD740), filled = true)

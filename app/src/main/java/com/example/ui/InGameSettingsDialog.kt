@@ -318,7 +318,7 @@ fun InGameSettingsDialog(
                             .height(40.dp)
                             .testTag("in_game_settings_minimize_button")
                     ) {
-                        Text("🗗 MINIMIZE (PiP)", fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                        Text("MINI WINDOW (PiP)", fontSize = 12.sp, fontWeight = FontWeight.Bold)
                     }
                 }
 
