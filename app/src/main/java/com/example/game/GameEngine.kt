@@ -111,7 +111,6 @@ class GameEngine(
     private var surpriseTimer = 22f
     var frenzyTimer = 0f
         private set
-        private set
 
     // Physics parameters
     private val baseTiltAccelFactor = 1600f
