@@ -10,6 +10,9 @@ concurrency:
   group: screenshots-${{ github.ref }}
   cancel-in-progress: true
 
+permissions:
+  contents: write
+
 jobs:
   screenshots:
     runs-on: ubuntu-latest
@@ -41,6 +44,21 @@ jobs:
             app/src/test/screenshots/**
             app/build/outputs/roborazzi/**
           if-no-files-found: warn
+
+      - name: Publish screenshots to a preview branch
+        if: always() && github.event_name != 'pull_request'
+        run: |
+          set -e
+          SRC="$GITHUB_WORKSPACE/app/src/test/screenshots"
+          [ -d "$SRC" ] || exit 0
+          TMP=$(mktemp -d)
+          cp -r "$SRC"/. "$TMP"/
+          cd "$TMP"
+          git init -q
+          git checkout -q -b "ci-shots/${GITHUB_REF_NAME}"
+          git add -A
+          git -c user.name=ci -c user.email=ci@users.noreply.github.com commit -qm "screenshots for ${GITHUB_SHA}"
+          git push -f "https://x-access-token:${{ github.token }}@github.com/${GITHUB_REPOSITORY}.git" "HEAD:refs/heads/ci-shots/${GITHUB_REF_NAME}"
 
       - name: Upload test reports
         if: failure()
