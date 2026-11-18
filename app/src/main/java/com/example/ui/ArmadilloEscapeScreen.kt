@@ -147,6 +147,11 @@ fun ArmadilloEscapeScreen(
 
     // Survives activity recreation (font scale/locale change, process death). An interrupted
     // round is restored to the round list instead of replaying the intro.
+    // "3-2-1" ready countdown: armed whenever a round (re)starts or play resumes after an ad,
+    // so the first frames after a transition are never played "blind" (v2.1 lag report).
+    var countdownPending by remember { mutableStateOf(true) }
+    var countdownEndNanos by remember { mutableLongStateOf(0L) }
+
     var currentScreen by rememberSaveable(
         stateSaver = androidx.compose.runtime.saveable.Saver<GameScreenState, String>(
             save = { if (it == GameScreenState.GAMEPLAY) GameScreenState.STAGE_SELECT.name else it.name },
@@ -318,6 +323,7 @@ fun ArmadilloEscapeScreen(
         isGamePaused = false
         val config = StageConfig.getStage(currentStageId)
         gameEngine.loadStage(config)
+        countdownPending = true
         effectiveAdManager.preload()
     }
     LaunchedEffect(gameOverDialogData != null, stageClearDialogData != null) {
@@ -348,8 +354,13 @@ fun ArmadilloEscapeScreen(
                 val dt = ((now - lastTime) / 1_000_000_000f).coerceIn(0.001f, 0.04f)
                 lastTime = now
                 frameTimeNanos = now
+                if (countdownPending && !isGamePaused) {
+                    countdownPending = false
+                    countdownEndNanos = now + COUNTDOWN_NANOS
+                }
+                val inCountdown = now < countdownEndNanos
 
-                if (!isGamePaused) {
+                if (!isGamePaused && !inCountdown) {
                     // Direct Virtual Joystick Finger Input driving armadillo and snake physics
                     gameEngine.update(
                         dt = dt,
@@ -840,6 +851,13 @@ fun ArmadilloEscapeScreen(
             modifier = Modifier.align(Alignment.TopCenter).padding(top = 50.dp)
         )
 
+        // ==================== READY COUNTDOWN ====================
+        ReadyCountdown(
+            frameTime = { frameTimeNanos },
+            endTime = { countdownEndNanos },
+            visible = !isGamePaused
+        )
+
 
         // ==================== VIRTUAL JOYSTICKS ====================
         if (activeMatchConfig.isSolo) {
@@ -1251,7 +1269,7 @@ fun ArmadilloEscapeScreen(
                 },
                 onRetryStage = {
                     stageClearDialogData = null
-                    showBreakAd { gameEngine.resetRound(); isGamePaused = false }
+                    showBreakAd { gameEngine.resetRound(); isGamePaused = false; countdownPending = true }
                 },
                 onSelectOther = {
                     stageClearDialogData = null
@@ -1280,6 +1298,7 @@ fun ArmadilloEscapeScreen(
                         snake2InputY = 0f
                         isGamePaused = false
                         gameEngine.resetRound()
+                        countdownPending = true
                     }
 
                     if (activity != null) {
@@ -1312,6 +1331,7 @@ fun ArmadilloEscapeScreen(
                                 snake2InputY = 0f
                                 isGamePaused = false
                                 gameEngine.resetRound()
+                                countdownPending = true
                             },
                             onUnavailable = {
                                 adStatusMessage = "No video available right now — try again in a moment."
@@ -1361,11 +1381,12 @@ fun ArmadilloEscapeScreen(
         if (isGamePaused && !isInPip && !showInGameSettings && stageClearDialogData == null && !showStageSelector && gameOverDialogData == null) {
             PauseOverlay(
                 stage = gameEngine.currentStage,
-                onResume = { isGamePaused = false },
+                onResume = { isGamePaused = false; countdownPending = true },
                 onSettings = { showInGameSettings = true },
                 onRestart = {
                     gameEngine.resetRound()
                     isGamePaused = false
+                    countdownPending = true
                 },
                 onExitToStages = {
                     isGamePaused = false
@@ -1995,5 +2016,24 @@ private fun IoStatusStrip(
                 style = proTitleStyle(if (combo >= 4) 20.sp else 16.sp, 2.sp)
             )
         }
+    }
+}
+
+private const val COUNTDOWN_NANOS = 1_500_000_000L
+
+/** Reads the per-frame clock inside its own scope so only this overlay recomposes each frame. */
+@Composable
+private fun ReadyCountdown(frameTime: () -> Long, endTime: () -> Long, visible: Boolean) {
+    val remaining = endTime() - frameTime()
+    if (!visible || remaining <= 0) return
+    val seg = COUNTDOWN_NANOS / 3
+    val step = (remaining / seg).toInt() + 1
+    val frac = (remaining % seg).toFloat() / seg
+    Box(Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.25f * frac)), contentAlignment = Alignment.Center) {
+        Text(
+            text = step.coerceIn(1, 3).toString(),
+            style = proTitleStyle(96.sp, 0.sp),
+            modifier = Modifier.scale(0.8f + 0.5f * frac).testTag("ready_countdown")
+        )
     }
 }

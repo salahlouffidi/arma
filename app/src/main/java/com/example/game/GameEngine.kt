@@ -556,10 +556,11 @@ class GameEngine(
         frenzyTimer = 0f
     }
 
-    private fun triggerSurprise(event: SurpriseEvent) {
+    internal fun triggerSurprise(event: SurpriseEvent) {
         when (event) {
             SurpriseEvent.FRUIT_RAIN -> {
-                repeat(6) {
+                val already = apples.count { it.isSpecialEventFruit && it.fruitType == FruitType.REGULAR_APPLE }
+                repeat((6 - already).coerceAtLeast(0)) {
                     apples.add(
                         AppleItem(
                             id = nextAppleId++,
@@ -1387,7 +1388,17 @@ class GameEngine(
         }
     }
 
+    private var pendingSpecialEvent = false
+
     private fun checkCollisions() {
+        checkCollisionsInternal()
+        if (pendingSpecialEvent) {
+            pendingSpecialEvent = false
+            triggerSpecialFruitEvent()
+        }
+    }
+
+    private fun checkCollisionsInternal() {
         val eatenIndices = mutableListOf<Int>()
 
         // 1. Armadillo 1 & Apples
@@ -1425,7 +1436,9 @@ class GameEngine(
                     fruitsCollectedSinceEvent++
                     if (fruitsCollectedSinceEvent >= 4) {
                         fruitsCollectedSinceEvent = 0
-                        triggerSpecialFruitEvent()
+                        // Deferred until after the collision pass: triggering it here mutated
+                        // `apples` while it was being iterated (crash with Fruit Rain).
+                        pendingSpecialEvent = true
                     }
 
                     // Increment progress towards Stage completion
@@ -1482,7 +1495,9 @@ class GameEngine(
                     fruitsCollectedSinceEvent++
                     if (fruitsCollectedSinceEvent >= 4) {
                         fruitsCollectedSinceEvent = 0
-                        triggerSpecialFruitEvent()
+                        // Deferred until after the collision pass: triggering it here mutated
+                        // `apples` while it was being iterated (crash with Fruit Rain).
+                        pendingSpecialEvent = true
                     }
 
                     // Increment progress towards Stage completion
@@ -1677,7 +1692,7 @@ class GameEngine(
         showBanner("🍎 SPECIAL FRUIT EVENT! CATCH THEM!")
 
         // Remove any old escaping fruits to keep table clean and exciting
-        apples.removeAll { it.isSpecialEventFruit }
+        apples.removeAll { it.isSpecialEventFruit && it.fruitType != FruitType.REGULAR_APPLE }
 
         val angles = listOf(
             Random.nextFloat() * 0.8f + 0.2f,
