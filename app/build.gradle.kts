@@ -17,10 +17,12 @@ android {
     applicationId = "com.aistudio.armadilloescape.xwqrpz"
     minSdk = 24
     targetSdk = 36
-    versionCode = 6
-    versionName = "2.0"
+    versionCode = 7
+    versionName = "2.1"
 
     testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+    // Live AdMob units by default; opt into Google test units with: ./gradlew ... -PuseTestAds=true
+    buildConfigField("boolean", "USE_TEST_ADS", (project.findProperty("useTestAds")?.toString() == "true").toString())
   }
 
   signingConfigs {

@@ -1830,6 +1830,7 @@ object TableRenderer {
                 PowerType.FREEZE -> Color(0xFF80D8FF) to Color(0xFF01579B)
                 PowerType.DOUBLE -> Color(0xFFFFD740) to Color(0xFFB26A00)
                 PowerType.SHRINK -> Color(0xFFB2FF59) to Color(0xFF33691E)
+                PowerType.MYSTERY -> Color(0xFFE040FB) to Color(0xFF4A148C)
             }
             val blink = if (p.life < 3f) (0.5f + 0.5f * sin(p.phase * 18f)) else 1f
             softOval(Offset(c.x + SHADOW_DX, c.y + SHADOW_DY + 10f), 20f, 9f, 0.45f)
@@ -1865,6 +1866,14 @@ object TableRenderer {
                         popPaint.color = android.graphics.Color.WHITE
                         canvas.nativeCanvas.drawText("x2", c.x, c.y + 7f, popPaint)
                     }
+                }
+                PowerType.MYSTERY -> {
+                    // gift box with a bow
+                    drawRoundRect(Color.White, topLeft = c + Offset(-10f, -4f), size = Size(20f, 14f), cornerRadius = CornerRadius(2f, 2f))
+                    drawRect(Color(0xFFFFD740), topLeft = c + Offset(-2.5f, -4f), size = Size(5f, 14f))
+                    drawRect(Color.White, topLeft = c + Offset(-12f, -9f), size = Size(24f, 6f))
+                    drawCircle(Color(0xFFFFD740), radius = 3.5f, center = c + Offset(-4f, -11f))
+                    drawCircle(Color(0xFFFFD740), radius = 3.5f, center = c + Offset(4f, -11f))
                 }
                 PowerType.SHRINK -> {
                     drawLine(Color.White, c + Offset(-8f, -8f), c + Offset(8f, 8f), strokeWidth = 3f, cap = StrokeCap.Round)

@@ -137,8 +137,12 @@ enum class PowerType(val label: String, val duration: Float) {
     MAGNET("MAGNET", 8f),
     FREEZE("FREEZE", 6f),
     DOUBLE("x2 POINTS", 10f),
-    SHRINK("SNAKE SHRINK", 0f)
+    SHRINK("SNAKE SHRINK", 0f),
+    MYSTERY("MYSTERY", 0f)
 }
+
+/** Unexpected events that can fire mid-round (v2.1). */
+enum class SurpriseEvent { FRUIT_RAIN, SNAKE_FRENZY, JACKPOT }
 
 data class PowerUpItem(
     val id: Int,

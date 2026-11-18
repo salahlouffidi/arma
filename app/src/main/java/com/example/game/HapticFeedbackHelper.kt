@@ -94,4 +94,37 @@ class HapticFeedbackHelper(context: Context) {
             }
         } catch (_: Exception) {}
     }
+
+    // ===== v2.1 "juicy" patterns =====
+    private fun waveform(timings: LongArray, amps: IntArray) {
+        if (!isHapticsEnabled) return
+        try {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O && vibrator?.hasAmplitudeControl() == true) {
+                vibrator.vibrate(VibrationEffect.createWaveform(timings, amps, -1))
+            } else if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                vibrator?.vibrate(VibrationEffect.createWaveform(timings, -1))
+            } else {
+                @Suppress("DEPRECATION")
+                vibrator?.vibrate(timings, -1)
+            }
+        } catch (_: Exception) {}
+    }
+
+    /** Golden / star / big-value fruit: double tap. */
+    fun specialFruit() = waveform(longArrayOf(0, 30, 50, 45), intArrayOf(0, 160, 0, 255))
+
+    /** Power-up orb collected: rising triple pulse. */
+    fun powerUp() = waveform(longArrayOf(0, 25, 40, 35, 40, 70), intArrayOf(0, 90, 0, 170, 0, 255))
+
+    /** Combo milestone: one short tick per level (max 4). */
+    fun combo(level: Int) {
+        val n = level.coerceIn(1, 4)
+        val t = LongArray(n * 2) { if (it % 2 == 0) (if (it == 0) 0L else 35L) else 18L }
+        val a = IntArray(n * 2) { if (it % 2 == 0) 0 else (120 + it * 30).coerceAtMost(255) }
+        waveform(t, a)
+    }
+
+    /** Surprise events (fruit rain, jackpot, frenzy): long rumble. */
+    fun surprise() = waveform(longArrayOf(0, 60, 40, 60, 40, 140), intArrayOf(0, 200, 0, 120, 0, 255))
+
 }

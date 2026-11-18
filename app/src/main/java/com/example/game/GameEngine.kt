@@ -19,7 +19,11 @@ class GameEngine(
     var onStageCompleted: ((StageConfig, Int, Int, Int, Float) -> Unit)? = null,
     var onGameOver: ((StageConfig, Int, Int, Int, Float) -> Unit)? = null,
     var onLavaHit: (() -> Unit)? = null,
-    var onArmadilloSpawned: (() -> Unit)? = null
+    var onArmadilloSpawned: (() -> Unit)? = null,
+    var onPowerUpCollected: ((PowerType) -> Unit)? = null,
+    var onBonusFruit: (() -> Unit)? = null,
+    var onComboMilestone: ((Int) -> Unit)? = null,
+    var onSurprise: ((SurpriseEvent) -> Unit)? = null
 ) {
     // Board playable dimensions (centered at 0,0)
     var boardHalfWidth: Float = 440f
@@ -104,6 +108,8 @@ class GameEngine(
     private var powerSpawnTimer = 6f
     private var nextPowerId = 1
     private var fruitsSinceGrowth = 0
+    private var surpriseTimer = 22f
+    var frenzyTimer = 0f
         private set
 
     // Physics parameters
@@ -546,6 +552,38 @@ class GameEngine(
         comboCount = 0; comboTimer = 0f; lastPointsGained = 0
         powerSpawnTimer = 6f
         fruitsSinceGrowth = 0
+        surpriseTimer = 20f + Random.nextFloat() * 12f
+        frenzyTimer = 0f
+    }
+
+    private fun triggerSurprise(event: SurpriseEvent) {
+        when (event) {
+            SurpriseEvent.FRUIT_RAIN -> {
+                repeat(6) {
+                    apples.add(
+                        AppleItem(
+                            id = nextAppleId++,
+                            pos = getRandomSafeApplePos(),
+                            fruitType = FruitType.REGULAR_APPLE,
+                            kind = FruitKinds.random(),
+                            isSpecialEventFruit = true,
+                            dropHeight = 180f + Random.nextFloat() * 140f,
+                            escapeSpeed = 0f
+                        )
+                    )
+                }
+                showBanner("🌧️ FRUIT RAIN!")
+            }
+            SurpriseEvent.SNAKE_FRENZY -> {
+                frenzyTimer = 5f
+                showBanner("⚠️ SNAKE FRENZY! RUN!")
+            }
+            SurpriseEvent.JACKPOT -> {
+                powerUps.add(PowerUpItem(id = nextPowerId++, pos = getRandomSafeApplePos(), type = PowerType.MYSTERY, life = 9f))
+                showBanner("🎁 MYSTERY BOX APPEARED!")
+            }
+        }
+        onSurprise?.invoke(event)
     }
 
     private val isPowerRushStage: Boolean
@@ -555,6 +593,19 @@ class GameEngine(
         if (magnetTimer > 0f) magnetTimer = (magnetTimer - dt).coerceAtLeast(0f)
         if (freezeTimer > 0f) freezeTimer = (freezeTimer - dt).coerceAtLeast(0f)
         if (doubleTimer > 0f) doubleTimer = (doubleTimer - dt).coerceAtLeast(0f)
+        if (frenzyTimer > 0f) frenzyTimer = (frenzyTimer - dt).coerceAtLeast(0f)
+        surpriseTimer -= dt
+        if (surpriseTimer <= 0f) {
+            surpriseTimer = 24f + Random.nextFloat() * 16f
+            val r = Random.nextFloat()
+            triggerSurprise(
+                when {
+                    r < 0.45f -> SurpriseEvent.FRUIT_RAIN
+                    r < 0.75f -> SurpriseEvent.JACKPOT
+                    else -> SurpriseEvent.SNAKE_FRENZY
+                }
+            )
+        }
         if (comboTimer > 0f) {
             comboTimer -= dt
             if (comboTimer <= 0f) { comboTimer = 0f; comboCount = 0 }
@@ -566,7 +617,7 @@ class GameEngine(
         if (powerSpawnTimer <= 0f) {
             powerSpawnTimer = if (isPowerRushStage) 6.5f + Random.nextFloat() * 3f else 11f + Random.nextFloat() * 5f
             if (powerUps.size < maxOnBoard) {
-                val types = PowerType.values()
+                val types = PowerType.values().filter { it != PowerType.MYSTERY }
                 powerUps.add(PowerUpItem(id = nextPowerId++, pos = getRandomSafeApplePos(), type = types[Random.nextInt(types.size)]))
             }
         }
@@ -606,7 +657,23 @@ class GameEngine(
     }
 
     private fun activatePower(type: PowerType, at: Vector2) {
+        onPowerUpCollected?.invoke(type)
         when (type) {
+            PowerType.MYSTERY -> {
+                val roll = Random.nextFloat()
+                if (roll < 0.4f) {
+                    val bonus = 10
+                    val newScore = stats.score + bonus
+                    stats = stats.copy(score = newScore, highScore = maxOf(stats.highScore, newScore))
+                    onScoreChanged?.invoke(newScore)
+                    lastPointsGained = bonus
+                    showBanner("💰 JACKPOT! +$bonus")
+                } else {
+                    val options = listOf(PowerType.MAGNET, PowerType.FREEZE, PowerType.DOUBLE, PowerType.SHRINK)
+                    activatePower(options[Random.nextInt(options.size)], at)
+                    return
+                }
+            }
             PowerType.MAGNET -> { magnetTimer = type.duration; showBanner("🧲 MAGNET! Fruits come to you") }
             PowerType.FREEZE -> { freezeTimer = type.duration; showBanner("❄️ FREEZE! Snakes slowed") }
             PowerType.DOUBLE -> { doubleTimer = type.duration; showBanner("✖️2 DOUBLE POINTS!") }
@@ -637,7 +704,11 @@ class GameEngine(
         var pts = base + comboBonus
         if (doubleTimer > 0f) pts *= 2
         lastPointsGained = pts
-        if (comboCount >= 3) showBanner("🔥 COMBO x$comboCount  +$pts")
+        if (comboCount >= 3) {
+            showBanner("🔥 COMBO x$comboCount  +$pts")
+            onComboMilestone?.invoke(comboCount)
+        }
+        if (apple.fruitType != FruitType.REGULAR_APPLE || apple.kind == 4) onBonusFruit?.invoke()
 
         // snake.io pressure: serpents grow as the player feeds
         fruitsSinceGrowth++
@@ -656,7 +727,7 @@ class GameEngine(
     }
 
     val freezeFactor: Float
-        get() = if (freezeTimer > 0f) 0.4f else 1f
+        get() = (if (freezeTimer > 0f) 0.4f else 1f) * (if (frenzyTimer > 0f) 1.35f else 1f)
 
     private fun computeArmadilloAiInput(arm: ArmadilloState): Vector2 {
         if (arm.isEaten) return Vector2.Zero
