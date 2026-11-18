@@ -132,7 +132,7 @@ fun InGameSettingsDialog(
                                 modifier = Modifier.fillMaxWidth(),
                                 horizontalArrangement = Arrangement.spacedBy(10.dp)
                             ) {
-                                Button(
+                                ProStyledButton(
                                     onClick = {
                                         isRightSide = false
                                         prefs.edit().putBoolean(joystickPrefKey(roundId), false).apply()
@@ -153,7 +153,7 @@ fun InGameSettingsDialog(
                                         Text("bottom-left", fontSize = 9.sp)
                                     }
                                 }
-                                Button(
+                                ProStyledButton(
                                     onClick = {
                                         isRightSide = true
                                         prefs.edit().putBoolean(joystickPrefKey(roundId), true).apply()
@@ -305,7 +305,7 @@ fun InGameSettingsDialog(
                 // Minimize / PiP Button
                 if (onMinimize != null) {
                     Spacer(modifier = Modifier.height(8.dp))
-                    Button(
+                    ProStyledButton(
                         onClick = onMinimize,
                         colors = ButtonDefaults.buttonColors(
                             containerColor = Color(0xFF1A2B35),
@@ -325,7 +325,7 @@ fun InGameSettingsDialog(
                 Spacer(modifier = Modifier.height(10.dp))
 
                 // Resume & Done Button
-                Button(
+                ProStyledButton(
                     onClick = onResume,
                     colors = ButtonDefaults.buttonColors(
                         containerColor = Color(0xFFD4AF37),

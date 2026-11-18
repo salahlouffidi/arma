@@ -180,13 +180,13 @@ fun AudioSettingsDialog(
 
                 Spacer(modifier = Modifier.height(12.dp))
                 Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                    Button(
+                    ProStyledButton(
                         onClick = { soundManager.playSpecialFruitActivated() },
                         colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF3E2516), contentColor = Color(0xFFFFD54F)),
                         shape = RoundedCornerShape(12.dp),
                         modifier = Modifier.weight(1f).height(40.dp).testTag("test_sfx_button")
                     ) { Text("🔔 TEST SFX", fontSize = 11.sp, fontWeight = FontWeight.Bold) }
-                    Button(
+                    ProStyledButton(
                         onClick = onDismiss,
                         colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFD4AF37), contentColor = Color(0xFF1B0E05)),
                         shape = RoundedCornerShape(12.dp),

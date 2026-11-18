@@ -293,7 +293,7 @@ private fun HowToPlayDialog(onDismiss: () -> Unit) {
 
                 Spacer(modifier = Modifier.height(14.dp))
 
-                Button(
+                ProStyledButton(
                     onClick = onDismiss,
                     colors = ButtonDefaults.buttonColors(
                         containerColor = Color(0xFFD4AF37),

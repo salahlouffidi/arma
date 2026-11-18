@@ -858,7 +858,7 @@ fun ArmadilloEscapeScreen(
                         }
                     }
 
-                    Button(
+                    ProStyledButton(
                         onClick = {
                             showStageSelector = true
                             haptics.click()
@@ -918,7 +918,7 @@ fun ArmadilloEscapeScreen(
                 ) {
                     if (isSingleJoystickRight) {
                         // When joystick is on the right, place ROUNDS button on the left
-                        Button(
+                        ProStyledButton(
                             onClick = {
                                 showStageSelector = true
                                 haptics.click()
@@ -1002,7 +1002,7 @@ fun ArmadilloEscapeScreen(
                         }
 
                         // Central / Right Action: ROUNDS Button
-                        Button(
+                        ProStyledButton(
                             onClick = {
                                 showStageSelector = true
                                 haptics.click()
@@ -1126,7 +1126,7 @@ fun ArmadilloEscapeScreen(
                 }
 
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Button(
+                    ProStyledButton(
                         onClick = {
                             currentScreen = GameScreenState.MULTIPLAYER_CONFIG
                             haptics.click()
@@ -1149,7 +1149,7 @@ fun ArmadilloEscapeScreen(
                         )
                     }
 
-                    Button(
+                    ProStyledButton(
                         onClick = {
                             showStageSelector = true
                             haptics.click()
@@ -1576,7 +1576,7 @@ private fun StageClearDialog(
                 // Action Buttons
                 if (data.stage.id < 16) {
                     val next = StageConfig.getStage(data.stage.id + 1)
-                    Button(
+                    ProStyledButton(
                         onClick = onNextStage,
                         colors = ButtonDefaults.buttonColors(
                             containerColor = Color(0xFFD4AF37),
@@ -1596,7 +1596,7 @@ private fun StageClearDialog(
                     }
                     Spacer(modifier = Modifier.height(8.dp))
                 } else {
-                    Button(
+                    ProStyledButton(
                         onClick = onRetryStage,
                         colors = ButtonDefaults.buttonColors(
                             containerColor = Color(0xFFFFD700),
@@ -1621,7 +1621,7 @@ private fun StageClearDialog(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
-                    Button(
+                    ProStyledButton(
                         onClick = onRetryStage,
                         colors = ButtonDefaults.buttonColors(
                             containerColor = Color(0xFF3E2516),
@@ -1636,7 +1636,7 @@ private fun StageClearDialog(
                         Text(text = "↺ RETRY ROUND", fontSize = 11.sp, fontWeight = FontWeight.Bold)
                     }
 
-                    Button(
+                    ProStyledButton(
                         onClick = onSelectOther,
                         colors = ButtonDefaults.buttonColors(
                             containerColor = Color(0xFF2C190F),
@@ -1856,7 +1856,7 @@ private fun GameOverDialog(
                         horizontalAlignment = Alignment.CenterHorizontally
                     ) {
                         // 1. Primary RETRY button (Prominent, Gold, Always Visible)
-                        Button(
+                        ProStyledButton(
                             onClick = onRetryRound,
                             colors = ButtonDefaults.buttonColors(
                                 containerColor = Color(0xFFD4AF37),
@@ -1877,7 +1877,7 @@ private fun GameOverDialog(
                         }
 
                         // 2. Optional Rewarded Ad Button (Second Chance)
-                        Button(
+                        ProStyledButton(
                             onClick = onWatchAdSecondChance,
                             colors = ButtonDefaults.buttonColors(
                                 containerColor = Color(0xFF1B4332),
@@ -1899,7 +1899,7 @@ private fun GameOverDialog(
                         }
 
                         // 3. Secondary ROUNDS button
-                        Button(
+                        ProStyledButton(
                             onClick = onExitToRounds,
                             colors = ButtonDefaults.buttonColors(
                                 containerColor = Color(0xFF2C190F),

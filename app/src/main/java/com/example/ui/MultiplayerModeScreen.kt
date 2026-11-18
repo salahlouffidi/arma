@@ -110,7 +110,7 @@ fun MultiplayerModeScreen(
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.SpaceBetween
             ) {
-                Button(
+                ProStyledButton(
                     onClick = {
                         soundManager.playMenuClick()
                         onBackToGameModeSelect()
@@ -149,7 +149,7 @@ fun MultiplayerModeScreen(
                 }
 
                 // Proceed Button
-                Button(
+                ProStyledButton(
                     onClick = {
                         soundManager.playMenuClick()
                         onConfirmMatchConfig(currentConfig)
@@ -353,7 +353,7 @@ fun MultiplayerModeScreen(
                                 )
                             }
 
-                            Button(
+                            ProStyledButton(
                                 onClick = {
                                     soundManager.playMenuClick()
                                     isCustomDialogVisible = true
@@ -551,7 +551,7 @@ private fun CustomRoleSelectionView(
                 )
             }
 
-            Button(
+            ProStyledButton(
                 onClick = onCloseCustom,
                 colors = ButtonDefaults.buttonColors(
                     containerColor = Color(0xFF3B1E54),
@@ -686,7 +686,7 @@ private fun CharacterRoleCard(
                 ) {
                     for (p in 1..4) {
                         val isCurrent = slot.roleType == RoleType.HUMAN && slot.playerNumber == p
-                        Button(
+                        ProStyledButton(
                             onClick = { onRoleSelected(RoleType.HUMAN, p) },
                             colors = ButtonDefaults.buttonColors(
                                 containerColor = if (isCurrent) charId.primaryColor else Color(0xFF2C1C3D),
@@ -711,7 +711,7 @@ private fun CharacterRoleCard(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.spacedBy(4.dp)
                 ) {
-                    Button(
+                    ProStyledButton(
                         onClick = { onRoleSelected(RoleType.AI, null) },
                         colors = ButtonDefaults.buttonColors(
                             containerColor = if (slot.roleType == RoleType.AI) Color(0xFF78909C) else Color(0xFF2C1C3D),
@@ -727,7 +727,7 @@ private fun CharacterRoleCard(
                         Text(text = "🤖 AI", fontSize = 9.5.sp, fontWeight = FontWeight.Bold)
                     }
 
-                    Button(
+                    ProStyledButton(
                         onClick = { onRoleSelected(RoleType.DISABLED, null) },
                         colors = ButtonDefaults.buttonColors(
                             containerColor = if (slot.roleType == RoleType.DISABLED) Color(0xFFD32F2F) else Color(0xFF2C1C3D),

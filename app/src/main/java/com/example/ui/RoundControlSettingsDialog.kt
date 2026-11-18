@@ -100,7 +100,7 @@ fun RoundControlSettingsDialog(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.spacedBy(10.dp)
                 ) {
-                    Button(
+                    ProStyledButton(
                         onClick = {
                             rightSide = false
                             preferences.edit().putBoolean(joystickRightKey(roundId), false).apply()
@@ -125,7 +125,7 @@ fun RoundControlSettingsDialog(
                             )
                         }
                     }
-                    Button(
+                    ProStyledButton(
                         onClick = {
                             rightSide = true
                             preferences.edit().putBoolean(joystickRightKey(roundId), true).apply()
@@ -161,7 +161,7 @@ fun RoundControlSettingsDialog(
                 )
 
                 Spacer(modifier = Modifier.height(14.dp))
-                Button(
+                ProStyledButton(
                     onClick = onDismiss,
                     colors = ButtonDefaults.buttonColors(
                         containerColor = Color(0xFFD4AF37),

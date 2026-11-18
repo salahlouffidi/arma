@@ -59,11 +59,8 @@ fun PauseOverlay(
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
                 Text(
-                    text = "⏸️ PAUSED",
-                    color = Color(0xFFFFD54F),
-                    fontSize = 20.sp,
-                    fontWeight = FontWeight.Black,
-                    letterSpacing = 1.sp
+                    text = "PAUSED",
+                    style = proTitleStyle(26.sp, 4.sp)
                 )
                 Spacer(modifier = Modifier.height(4.dp))
                 Text(
@@ -77,7 +74,7 @@ fun PauseOverlay(
                 Spacer(modifier = Modifier.height(18.dp))
 
                 // Big Resume Button
-                Button(
+                ProStyledButton(
                     onClick = onResume,
                     colors = ButtonDefaults.buttonColors(
                         containerColor = Color(0xFFD4AF37),
@@ -101,7 +98,7 @@ fun PauseOverlay(
                 Spacer(modifier = Modifier.height(10.dp))
 
                 // Settings Button
-                Button(
+                ProStyledButton(
                     onClick = onSettings,
                     colors = ButtonDefaults.buttonColors(
                         containerColor = Color(0xFF3E2312),
@@ -126,7 +123,7 @@ fun PauseOverlay(
                 // Minimize / PiP Button
                 if (onMinimize != null) {
                     Spacer(modifier = Modifier.height(10.dp))
-                    Button(
+                    ProStyledButton(
                         onClick = onMinimize,
                         colors = ButtonDefaults.buttonColors(
                             containerColor = Color(0xFF1A2B35),
@@ -150,7 +147,7 @@ fun PauseOverlay(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
-                    Button(
+                    ProStyledButton(
                         onClick = onRestart,
                         colors = ButtonDefaults.buttonColors(
                             containerColor = Color(0xFF2A1509),
@@ -171,7 +168,7 @@ fun PauseOverlay(
                         Text("RETRY ROUND", fontSize = 11.sp, fontWeight = FontWeight.Bold)
                     }
 
-                    Button(
+                    ProStyledButton(
                         onClick = onExitToStages,
                         colors = ButtonDefaults.buttonColors(
                             containerColor = Color(0xFF2A1509),

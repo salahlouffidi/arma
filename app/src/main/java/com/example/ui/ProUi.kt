@@ -358,3 +358,65 @@ fun MascotSnake(modifier: Modifier = Modifier, purple: Boolean = false) {
         }
     }
 }
+
+/**
+ * Drop-in replacement for material3 `Button(...)` used across dialogs: same parameters, but
+ * rendered with the ARMASNAKE bevel style. Bright container colours map to the gold primary
+ * style, dark ones to the bronze secondary style, keeping each call site's intent.
+ */
+@Composable
+fun ProStyledButton(
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+    enabled: Boolean = true,
+    shape: androidx.compose.ui.graphics.Shape = RoundedCornerShape(14.dp),
+    colors: androidx.compose.material3.ButtonColors = androidx.compose.material3.ButtonDefaults.buttonColors(),
+    elevation: androidx.compose.material3.ButtonElevation? = null,
+    border: BorderStroke? = null,
+    contentPadding: PaddingValues = PaddingValues(horizontal = 16.dp, vertical = 6.dp),
+    interactionSource: MutableInteractionSource? = null,
+    content: @Composable RowScope.() -> Unit
+) {
+    val interaction = interactionSource ?: remember { MutableInteractionSource() }
+    val pressed by interaction.collectIsPressedAsState()
+    val base = colors.containerColor
+    val lum = 0.299f * base.red + 0.587f * base.green + 0.114f * base.blue
+    val primary = lum > 0.45f && base.alpha > 0.5f
+    val accent = if (primary) base else colors.contentColor
+    val bg = if (primary) {
+        Brush.verticalGradient(listOf(base.copy(alpha = 1f).let { lerpColor(it, Color.White, 0.35f) }, base.copy(alpha = 1f), lerpColor(base.copy(alpha = 1f), Color.Black, 0.25f)))
+    } else {
+        Brush.verticalGradient(listOf(lerpColor(base.copy(alpha = 1f), Color.White, 0.08f), lerpColor(base.copy(alpha = 1f), Color.Black, 0.35f)))
+    }
+    val rimColor = border?.let { accent } ?: if (primary) Color(0xFFFFF4C8) else accent.copy(alpha = 0.55f)
+    val s = RoundedCornerShape(14.dp)
+    Box(
+        modifier
+            .scale(if (pressed) 0.97f else 1f)
+            .shadow(if (primary && !pressed) 8.dp else 2.dp, s, spotColor = Color.Black)
+            .clip(s)
+            .background(bg)
+            .border(BorderStroke(1.2.dp, Brush.verticalGradient(listOf(rimColor, rimColor.copy(alpha = 0.25f)))), s)
+            .drawBehind {
+                drawRect(
+                    Brush.verticalGradient(listOf(Color.White.copy(alpha = if (primary) 0.32f else 0.09f), Color.Transparent), endY = size.height * 0.5f)
+                )
+            }
+            .clickable(interactionSource = interaction, indication = null, enabled = enabled, role = Role.Button, onClick = onClick)
+            .padding(contentPadding),
+        contentAlignment = Alignment.Center
+    ) {
+        androidx.compose.runtime.CompositionLocalProvider(
+            androidx.compose.material3.LocalContentColor provides if (enabled) colors.contentColor else colors.contentColor.copy(alpha = 0.4f),
+            androidx.compose.material3.LocalTextStyle provides TextStyle(fontWeight = FontWeight.Black, letterSpacing = 0.8.sp)
+        ) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = androidx.compose.foundation.layout.Arrangement.Center,
+                content = content
+            )
+        }
+    }
+}
+
+private fun lerpColor(a: Color, b: Color, f: Float) = androidx.compose.ui.graphics.lerp(a, b, f)
