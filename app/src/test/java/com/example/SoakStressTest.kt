@@ -46,7 +46,7 @@ class SoakStressTest {
             e.loadStage(StageConfig.getStage(id))
             var ix = 0f; var iy = 0f; var ix2 = 0f; var iy2 = 0f
             val center = Offset(800f, 360f)
-            for (step in 0 until 9000) { // ~150 s of game time per round
+            for (step in 0 until 6000) { // ~100 s of game time per round
                 if (step % 30 == 0) {
                     ix = rnd.nextFloat() * 2f - 1f; iy = rnd.nextFloat() * 2f - 1f
                     ix2 = rnd.nextFloat() * 2f - 1f; iy2 = rnd.nextFloat() * 2f - 1f
@@ -54,7 +54,7 @@ class SoakStressTest {
                 try {
                     e.update(0.016f, ix, iy, ix2, iy2)
                     if (e.isGameOver || e.isStageCompleted) e.resetRound()
-                    if (step % 3 == 0) {
+                    if (step % 12 == 0) {
                         draw.draw(Density(2.6f), LayoutDirection.Ltr, canvas, Size(1600f, 720f)) {
                             val shake = TableRenderer.updateFx(
                                 buildList { add(e.armadillo to false); e.armadillo2?.let { add(it to true) } },

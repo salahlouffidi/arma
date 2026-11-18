@@ -28,6 +28,22 @@ class IoSystemsTest {
         update(0.016f, 0f, 0f)
     }
 
+    /** Regression: 4th fruit (special event) while Fruit Rain is on the board crashed the app. */
+    @Test
+    fun specialEventDuringFruitRainDoesNotCrash() {
+        val e = engineOnRound()
+        repeat(3) {
+            e.triggerSurprise(com.example.game.SurpriseEvent.FRUIT_RAIN)
+            repeat(8) {
+                // put a regular fruit plus all landed rain fruit right on the armadillo
+                e.apples.add(AppleItem(id = 5000 + it, pos = e.armadillo.pos, fruitType = FruitType.REGULAR_APPLE))
+                e.update(0.016f, 0f, 0f)
+            }
+            repeat(120) { e.update(0.016f, 0f, 0f) }
+        }
+        assertTrue(e.stats.score > 0)
+    }
+
     @Test
     fun worldThreeRoundsExist() {
         assertEquals(20, StageConfig.MAX_ROUND)
