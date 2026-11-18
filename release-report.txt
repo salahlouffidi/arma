@@ -1,0 +1,97 @@
+== commit d75241ba6cd78806ce31608e696bfae3e39906af
+== outputs
+find: ‘app/build/outputs/bundle’: No such file or directory
+== AAB metadata entries
+unzip:  cannot find or open , .zip or .ZIP.
+== native libs in AAB
+unzip:  cannot find or open , .zip or .ZIP.
+none
+== dex files
+unzip:  cannot find or open , .zip or .ZIP.
+== mapping head
+head: cannot open 'app/build/outputs/mapping/release/mapping.txt' for reading: No such file or directory
+== mapping: app classes renamed
+grep: app/build/outputs/mapping/release/mapping.txt: No such file or directory
+== mapping: count app classes kept vs renamed
+grep: app/build/outputs/mapping/release/mapping.txt: No such file or directory
+kept= renamed=
+== signing
+find: ‘app/build/outputs/apk/release’: No such file or directory
+
+== lint summary
+androidx.fragment:fragment:1.8.9
+  Variant releaseVariantReleaseRuntimePublication:
+    | Attribute Name                                  | Provided     | Requested    |
+    |-------------------------------------------------|--------------|--------------|
+    | org.gradle.dependency.bundling                  | external     |              |
+    | org.gradle.libraryelements                      | aar          |              |
+    | org.gradle.status                               | release      |              |
+    | org.gradle.category                             | library      | library      |
+    | org.gradle.usage                                | java-runtime | java-runtime |
+    | com.android.build.api.attributes.AgpVersionAttr |              | 9.1.1        |
+    | com.android.build.api.attributes.BuildTypeAttr  |              | release      |
+    | org.gradle.jvm.environment                      |              | android      |
+    | org.jetbrains.kotlin.platform.type              |              | androidJvm   |
+   Selection reasons:
+      - By conflict resolution: between versions 1.8.9, 1.1.0 and 1.0.0
+
+androidx.fragment:fragment:1.8.9
+\--- releaseRuntimeClasspath
+
+androidx.fragment:fragment:1.0.0 -> 1.8.9
+\--- com.google.android.gms:play-services-base:18.0.0
+     \--- com.google.android.gms:play-services-appset:16.0.1
+          \--- com.google.android.gms:play-services-ads:25.5.0
+               \--- releaseRuntimeClasspath
+
+androidx.fragment:fragment:1.1.0 -> 1.8.9
+\--- com.google.android.gms:play-services-basement:18.9.0
+     +--- com.google.android.gms:play-services-ads:25.5.0
+     |    \--- releaseRuntimeClasspath
+     +--- com.google.android.gms:play-services-ads-api:25.5.0
+     |    \--- com.google.android.gms:play-services-ads:25.5.0 (*)
+     +--- com.google.android.ump:user-messaging-platform:4.0.0
+     |    +--- releaseRuntimeClasspath
+     |    \--- com.google.android.gms:play-services-ads-api:25.5.0 (*)
+     +--- com.google.android.gms:play-services-ads-identifier:18.0.0 (requested com.google.android.gms:play-services-basement:18.0.0)
+     |    \--- com.google.android.gms:play-services-ads:25.5.0 (*)
+     +--- com.google.android.gms:play-services-appset:16.0.1 (requested com.google.android.gms:play-services-basement:18.0.0)
+     |    \--- com.google.android.gms:play-services-ads:25.5.0 (*)
+     +--- com.google.android.gms:play-services-base:18.0.0 (requested com.google.android.gms:play-services-basement:18.0.0)
+     |    \--- com.google.android.gms:play-services-appset:16.0.1 (*)
+     +--- com.google.android.gms:play-services-tasks:18.2.0 (requested com.google.android.gms:play-services-basement:18.4.0)
+     |    +--- com.google.android.gms:play-services-ads:25.5.0 (*)
+     |    +--- com.google.android.gms:play-services-appset:16.0.1 (requested com.google.android.gms:play-services-tasks:18.0.0) (*)
+     |    \--- com.google.android.gms:play-services-base:18.0.0 (requested com.google.android.gms:play-services-tasks:18.0.0) (*)
+     +--- com.google.android.gms:play-services-measurement-sdk-api:20.1.2 (requested com.google.android.gms:play-services-basement:18.0.0)
+     |    \--- com.google.android.gms:play-services-ads-api:25.5.0 (*)
+     +--- com.google.android.play:hsdp:2.0.1
+     |    \--- com.google.android.gms:play-services-ads-api:25.5.0 (*)
+     \--- com.google.android.gms:play-services-measurement-base:20.1.2 (requested com.google.android.gms:play-services-basement:18.0.0)
+          \--- com.google.android.gms:play-services-measurement-sdk-api:20.1.2 (*)
+
+(*) - Indicates repeated occurrences of a transitive dependency subtree. Gradle expands transitive dependency subtrees only once per project; repeat occurrences only display the root of the subtree, followed by this annotation.
+
+A web-based, searchable dependency report is available by adding the --scan option.
+com.google.android.ump:user-messaging-platform:4.0.0
+  Variant runtime:
+    | Attribute Name                                  | Provided     | Requested    |
+    |-------------------------------------------------|--------------|--------------|
+    | org.gradle.libraryelements                      | jar          |              |
+    | org.gradle.status                               | release      |              |
+    | org.gradle.category                             | library      | library      |
+    | org.gradle.usage                                | java-runtime | java-runtime |
+    | com.android.build.api.attributes.AgpVersionAttr |              | 9.1.1        |
+    | com.android.build.api.attributes.BuildTypeAttr  |              | release      |
+    | org.gradle.jvm.environment                      |              | android      |
+    | org.jetbrains.kotlin.platform.type              |              | androidJvm   |
+
+com.google.android.ump:user-messaging-platform:4.0.0
++--- releaseRuntimeClasspath
+\--- com.google.android.gms:play-services-ads-api:25.5.0
+     \--- com.google.android.gms:play-services-ads:25.5.0
+          \--- releaseRuntimeClasspath
+
+(*) - Indicates repeated occurrences of a transitive dependency subtree. Gradle expands transitive dependency subtrees only once per project; repeat occurrences only display the root of the subtree, followed by this annotation.
+
+A web-based, searchable dependency report is available by adding the --scan option.
