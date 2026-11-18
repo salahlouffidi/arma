@@ -147,6 +147,11 @@ fun ArmadilloEscapeScreen(
 
     // Survives activity recreation (font scale/locale change, process death). An interrupted
     // round is restored to the round list instead of replaying the intro.
+    // "3-2-1" ready countdown: armed whenever a round (re)starts or play resumes after an ad,
+    // so the first frames after a transition are never played "blind" (v2.1 lag report).
+    var countdownPending by remember { mutableStateOf(true) }
+    var countdownEndNanos by remember { mutableLongStateOf(0L) }
+
     var currentScreen by rememberSaveable(
         stateSaver = androidx.compose.runtime.saveable.Saver<GameScreenState, String>(
             save = { if (it == GameScreenState.GAMEPLAY) GameScreenState.STAGE_SELECT.name else it.name },
@@ -338,10 +343,6 @@ fun ArmadilloEscapeScreen(
 
     // Game Loop (active only during gameplay)
     var frameTimeNanos by remember { mutableLongStateOf(0L) }
-    // "3-2-1" ready countdown: armed whenever a round (re)starts or play resumes after an ad,
-    // so the first frames after a transition are never played "blind" (v2.1 lag report).
-    var countdownPending by remember { mutableStateOf(true) }
-    var countdownEndNanos by remember { mutableLongStateOf(0L) }
     var tick by remember { mutableLongStateOf(0L) }
 
     LaunchedEffect(currentScreen) {
