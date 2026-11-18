@@ -49,6 +49,12 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import com.example.game.SoundManager
+import com.example.game.StageConfig
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.BoxWithConstraints
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.safeDrawingPadding
+import androidx.compose.ui.draw.scale
 
 @Composable
 fun MainMenuScreen(
@@ -57,252 +63,164 @@ fun MainMenuScreen(
     onStartGame: (stageId: Int) -> Unit,
     onOpenStageSelect: () -> Unit,
     onOpenAudioSettings: () -> Unit,
-    onOpenGameModeSelect: () -> Unit = onOpenStageSelect
+    onOpenGameModeSelect: () -> Unit = onOpenStageSelect,
+    onOpenPrivacyOptions: (() -> Unit)? = null
 ) {
     var showHowToPlay by remember { mutableStateOf(false) }
 
     val infiniteTransition = rememberInfiniteTransition(label = "pulse")
     val bannerGlow by infiniteTransition.animateFloat(
-        initialValue = 0.8f,
-        targetValue = 1.05f,
+        initialValue = 0.96f,
+        targetValue = 1.04f,
         animationSpec = infiniteRepeatable(
-            animation = tween(1200, easing = LinearEasing),
+            animation = tween(1400, easing = LinearEasing),
             repeatMode = RepeatMode.Reverse
         ),
         label = "glow"
     )
 
-    Box(
-        modifier = Modifier
-            .fillMaxSize()
-            .background(
-                Brush.verticalGradient(
-                    colors = listOf(
-                        Color(0xFF261208),
-                        Color(0xFF190C05),
-                        Color(0xFF0F0703)
-                    )
-                )
-            )
-            .statusBarsPadding()
-            .navigationBarsPadding()
-            .testTag("main_menu_screen"),
-        contentAlignment = Alignment.Center
+    ProBackdrop(
+        modifier = Modifier.testTag("main_menu_screen"),
+        theme = StageConfig.getStage(currentStageId).theme,
+        dim = 0.45f
     ) {
-        Column(
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.Center,
-            modifier = Modifier.padding(horizontal = 24.dp, vertical = 12.dp)
+        BoxWithConstraints(
+            modifier = Modifier
+                .fillMaxSize()
+                .safeDrawingPadding()
+                .padding(horizontal = 24.dp, vertical = 12.dp)
         ) {
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.Center
-            ) {
-                Text(text = "🦔", fontSize = 36.sp)
-                Spacer(modifier = Modifier.width(8.dp))
+            val wide = maxWidth > maxHeight
+            val hero: @Composable () -> Unit = {
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                    Text(
-                        text = "ARMASNAKE",
-                        color = Color(0xFFFFD700),
-                        fontSize = 32.sp,
-                        fontWeight = FontWeight.Black,
-                        letterSpacing = 2.5.sp
-                    )
-                    Text(
-                        text = "LOUFFI EDITION",
-                        color = Color(0xFFFF8F00),
-                        fontSize = 13.sp,
-                        fontWeight = FontWeight.ExtraBold,
-                        letterSpacing = 2.sp
-                    )
-                }
-                Spacer(modifier = Modifier.width(8.dp))
-                Text(text = "🐍", fontSize = 36.sp)
-            }
-
-            Spacer(modifier = Modifier.height(8.dp))
-
-            Surface(
-                color = Color(0xFF3E1F0C),
-                shape = RoundedCornerShape(12.dp),
-                border = BorderStroke(1.dp, Color(0xFFD4AF37))
-            ) {
-                Text(
-                    text = "🏆 16-ROUND CAMPAIGN • SOLO",
-                    color = Color(0xFFFFE082),
-                    fontSize = 11.sp,
-                    fontWeight = FontWeight.Bold,
-                    letterSpacing = 0.5.sp,
-                    modifier = Modifier.padding(horizontal = 14.dp, vertical = 5.dp)
-                )
-            }
-
-            Spacer(modifier = Modifier.height(16.dp))
-
-            Row(
-                horizontalArrangement = Arrangement.spacedBy(12.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Button(
-                    onClick = {
-                        soundManager.playMenuClick()
-                        onOpenGameModeSelect()
-                    },
-                    colors = ButtonDefaults.buttonColors(
-                        containerColor = Color(0xFFD4AF37),
-                        contentColor = Color(0xFF1F0D03)
-                    ),
-                    shape = RoundedCornerShape(14.dp),
-                    elevation = ButtonDefaults.buttonElevation(defaultElevation = 6.dp),
-                    modifier = Modifier
-                        .height(46.dp)
-                        .testTag("menu_play_button")
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.PlayArrow,
-                        contentDescription = null,
-                        modifier = Modifier.size(20.dp)
-                    )
-                    Spacer(modifier = Modifier.width(6.dp))
-                    Text(
-                        text = "PLAY SOLO",
-                        fontSize = 13.sp,
-                        fontWeight = FontWeight.Black,
-                        letterSpacing = 0.5.sp
-                    )
-                }
-
-                Button(
-                    onClick = {
-                        soundManager.playMenuClick()
-                        onOpenStageSelect()
-                    },
-                    colors = ButtonDefaults.buttonColors(
-                        containerColor = Color(0xFF3E2312),
-                        contentColor = Color(0xFFFFD54F)
-                    ),
-                    shape = RoundedCornerShape(14.dp),
-                    border = BorderStroke(1.5.dp, Color(0xFFD4AF37)),
-                    modifier = Modifier
-                        .height(46.dp)
-                        .testTag("menu_round_select_button")
-                ) {
-                    Text(
-                        text = "🏆 SELECT ROUND (1–16)",
-                        fontSize = 12.sp,
-                        fontWeight = FontWeight.ExtraBold
-                    )
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        MascotArmadillo(Modifier.size(64.dp), heading = 0.35f)
+                        Spacer(Modifier.width(6.dp))
+                        Text(
+                            text = "ARMASNAKE",
+                            style = proTitleStyle(if (wide) 46.sp else 40.sp, 3.sp),
+                            modifier = Modifier.scale(bannerGlow)
+                        )
+                        Spacer(Modifier.width(6.dp))
+                        MascotSnake(Modifier.size(64.dp))
+                    }
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        ProDivider(Modifier.width(48.dp))
+                        Text(
+                            text = "  LOUFFI EDITION  ",
+                            color = Color(0xFFFFB547),
+                            fontSize = 13.sp,
+                            fontWeight = FontWeight.ExtraBold,
+                            letterSpacing = 5.sp
+                        )
+                        ProDivider(Modifier.width(48.dp))
+                    }
+                    Spacer(Modifier.height(14.dp))
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        ProChip("16 ROUNDS", color = ArmaColors.Gold, filled = true)
+                        ProChip("SOLO & DUAL", color = ArmaColors.Blue)
+                        ProChip("OVERDRIVE SHIELD", color = ArmaColors.Green)
+                    }
                 }
             }
-
-            Spacer(modifier = Modifier.height(12.dp))
-
-            Row(
-                horizontalArrangement = Arrangement.spacedBy(10.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Button(
-                    onClick = {
-                        soundManager.playMenuClick()
-                        onOpenAudioSettings()
-                    },
-                    colors = ButtonDefaults.buttonColors(
-                        containerColor = Color(0xFF261408),
-                        contentColor = Color(0xFFFFE0B2)
-                    ),
-                    shape = RoundedCornerShape(12.dp),
-                    border = BorderStroke(1.dp, Color(0x60D4AF37)),
-                    modifier = Modifier
-                        .height(38.dp)
-                        .testTag("menu_audio_settings_button")
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.Settings,
-                        contentDescription = null,
-                        modifier = Modifier.size(16.dp),
-                        tint = Color(0xFFFFD54F)
-                    )
-                    Spacer(modifier = Modifier.width(6.dp))
-                    Text(
-                        text = "AUDIO SETTINGS",
-                        fontSize = 11.sp,
-                        fontWeight = FontWeight.Bold
-                    )
-                }
-
-                Button(
-                    onClick = {
-                        soundManager.playMenuClick()
-                        showHowToPlay = true
-                    },
-                    colors = ButtonDefaults.buttonColors(
-                        containerColor = Color(0xFF261408),
-                        contentColor = Color(0xFFFFE0B2)
-                    ),
-                    shape = RoundedCornerShape(12.dp),
-                    border = BorderStroke(1.dp, Color(0x6081C784)),
-                    modifier = Modifier
-                        .height(38.dp)
-                        .testTag("menu_how_to_play_button")
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.Info,
-                        contentDescription = null,
-                        modifier = Modifier.size(16.dp),
-                        tint = Color(0xFF81C784)
-                    )
-                    Spacer(modifier = Modifier.width(6.dp))
-                    Text(
-                        text = "RULES & OVERDRIVE",
-                        fontSize = 11.sp,
-                        fontWeight = FontWeight.Bold
-                    )
+            val actions: @Composable () -> Unit = {
+                ProPanel(highlighted = true, modifier = Modifier.width(320.dp)) {
+                    Column(
+                        modifier = Modifier.padding(18.dp),
+                        verticalArrangement = Arrangement.spacedBy(10.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally
+                    ) {
+                        Text(
+                            "ROUND ${currentStageId.toString().padStart(2, '0')} • ${StageConfig.getStage(currentStageId).title.uppercase()}",
+                            color = ArmaColors.TextLow,
+                            fontSize = 10.sp,
+                            fontWeight = FontWeight.Bold,
+                            letterSpacing = 1.5.sp
+                        )
+                        ProButton(
+                            text = "PLAY",
+                            onClick = {
+                                soundManager.playMenuClick()
+                                onOpenGameModeSelect()
+                            },
+                            height = 54.dp,
+                            fontSize = 18.sp,
+                            modifier = Modifier.fillMaxWidth().testTag("menu_play_button"),
+                            leading = {
+                                Icon(Icons.Default.PlayArrow, contentDescription = null, tint = ArmaColors.Ink, modifier = Modifier.size(24.dp))
+                            }
+                        )
+                        ProButton(
+                            text = "SELECT ROUND",
+                            onClick = {
+                                soundManager.playMenuClick()
+                                onOpenStageSelect()
+                            },
+                            style = ProButtonStyle.Secondary,
+                            height = 44.dp,
+                            fontSize = 13.sp,
+                            modifier = Modifier.fillMaxWidth().testTag("menu_round_select_button")
+                        )
+                        Row(horizontalArrangement = Arrangement.spacedBy(10.dp), modifier = Modifier.fillMaxWidth()) {
+                            ProButton(
+                                text = "AUDIO",
+                                onClick = {
+                                    soundManager.playMenuClick()
+                                    onOpenAudioSettings()
+                                },
+                                style = ProButtonStyle.Ghost,
+                                height = 40.dp,
+                                fontSize = 11.sp,
+                                contentPadding = PaddingValues(horizontal = 8.dp),
+                                modifier = Modifier.weight(1f).testTag("menu_audio_settings_button"),
+                                leading = { Icon(Icons.Default.Settings, contentDescription = null, tint = ArmaColors.Gold, modifier = Modifier.size(16.dp)) }
+                            )
+                            ProButton(
+                                text = "RULES",
+                                onClick = {
+                                    soundManager.playMenuClick()
+                                    showHowToPlay = true
+                                },
+                                style = ProButtonStyle.Ghost,
+                                height = 40.dp,
+                                fontSize = 11.sp,
+                                contentPadding = PaddingValues(horizontal = 8.dp),
+                                modifier = Modifier.weight(1f).testTag("menu_how_to_play_button"),
+                                leading = { Icon(Icons.Default.Info, contentDescription = null, tint = ArmaColors.Green, modifier = Modifier.size(16.dp)) }
+                            )
+                        }
+                        if (onOpenPrivacyOptions != null) {
+                            Text(
+                                text = "Privacy options",
+                                color = ArmaColors.TextLow,
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.SemiBold,
+                                modifier = Modifier
+                                    .clickable { onOpenPrivacyOptions() }
+                                    .padding(4.dp)
+                                    .testTag("menu_privacy_options")
+                            )
+                        }
+                    }
                 }
             }
-
-            Spacer(modifier = Modifier.height(12.dp))
-
-            Row(
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Surface(
-                    color = Color(0x40000000),
-                    shape = RoundedCornerShape(8.dp),
-                    border = BorderStroke(0.5.dp, Color(0x30FFFFFF))
+            if (wide) {
+                Row(
+                    modifier = Modifier.fillMaxSize(),
+                    horizontalArrangement = Arrangement.SpaceEvenly,
+                    verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Text(
-                        text = "🕹️ Virtual Joystick",
-                        color = Color(0xFFBCAAA4),
-                        fontSize = 10.sp,
-                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
-                    )
+                    hero()
+                    actions()
                 }
-
-                Surface(
-                    color = Color(0x40000000),
-                    shape = RoundedCornerShape(8.dp),
-                    border = BorderStroke(0.5.dp, Color(0x30FFFFFF))
+            } else {
+                Column(
+                    modifier = Modifier.fillMaxSize(),
+                    verticalArrangement = Arrangement.SpaceEvenly,
+                    horizontalAlignment = Alignment.CenterHorizontally
                 ) {
-                    Text(
-                        text = "⚡ OVERDRIVE Power Shield",
-                        color = Color(0xFFFFD54F),
-                        fontSize = 10.sp,
-                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
-                    )
-                }
-
-                Surface(
-                    color = Color(0x40000000),
-                    shape = RoundedCornerShape(8.dp),
-                    border = BorderStroke(0.5.dp, Color(0x30FFFFFF))
-                ) {
-                    Text(
-                        text = "🍎 4-Fruit Scatter Chase",
-                        color = Color(0xFFFF8A65),
-                        fontSize = 10.sp,
-                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
-                    )
+                    hero()
+                    actions()
                 }
             }
         }
@@ -375,7 +293,7 @@ private fun HowToPlayDialog(onDismiss: () -> Unit) {
 
                 Spacer(modifier = Modifier.height(14.dp))
 
-                Button(
+                ProStyledButton(
                     onClick = onDismiss,
                     colors = ButtonDefaults.buttonColors(
                         containerColor = Color(0xFFD4AF37),

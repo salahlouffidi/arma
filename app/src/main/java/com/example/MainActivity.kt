@@ -21,34 +21,44 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.unit.LayoutDirection
 import androidx.lifecycle.lifecycleScope
+import androidx.core.view.WindowCompat
+import androidx.core.view.WindowInsetsCompat
+import androidx.core.view.WindowInsetsControllerCompat
 import com.example.ads.AdManager
+import com.example.ads.ConsentManager
 import com.example.ui.ArmadilloEscapeScreen
 import com.example.ui.theme.ArmadilloEscapeTheme
 import com.google.android.gms.ads.MobileAds
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+import java.util.concurrent.atomic.AtomicBoolean
 
 class MainActivity : ComponentActivity() {
     private var isInPipMode by mutableStateOf(false)
     private var isGameplayActive by mutableStateOf(false)
+    private var privacyOptionsRequired by mutableStateOf(false)
     private lateinit var adManager: AdManager
+    private lateinit var consentManager: ConsentManager
+    private val mobileAdsInitStarted = AtomicBoolean(false)
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        // Strictly lock the visual game screen to fixed landscape orientation
-        requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE
+        // Orientation preference (landscape) is declared in the manifest; on large screens
+        // Android 16+ may ignore it, and the UI adapts to any size / orientation.
+        applyOrientationPolicy()
         enableEdgeToEdge()
 
-        adManager = AdManager(applicationContext)
-        lifecycleScope.launch(Dispatchers.IO) {
-            try {
-                MobileAds.initialize(this@MainActivity) {
-                    adManager.preload()
-                }
-            } catch (t: Throwable) {
-                // Safely handle environments without Google Play Services or AdServices
-            }
+        consentManager = ConsentManager(this)
+        adManager = AdManager(applicationContext) { consentManager.canRequestAds }
+
+        // UMP: refresh consent on every launch, then initialise ads only if allowed.
+        consentManager.gatherConsent(this) {
+            privacyOptionsRequired = consentManager.isPrivacyOptionsRequired
+            if (consentManager.canRequestAds) initializeMobileAdsOnce()
         }
+        // Consent obtained in a previous session: start loading in parallel.
+        if (consentManager.canRequestAds) initializeMobileAdsOnce()
 
         setContent {
             ArmadilloEscapeTheme {
@@ -61,11 +71,51 @@ class MainActivity : ComponentActivity() {
                             isInPip = isInPipMode,
                             onEnterPip = { enterPip() },
                             onSetGameplayActive = { updatePipParams(it) },
-                            adManager = adManager
+                            adManager = adManager,
+                            privacyOptionsRequired = privacyOptionsRequired,
+                            onOpenPrivacyOptions = { openPrivacyOptions() }
                         )
                     }
                 }
             }
+        }
+    }
+
+    /**
+     * Phones: landscape (either side, follows the sensor) — the arena and twin joysticks are
+     * designed for it. Tablets / foldables / desktop windows (smallest width >= 600dp): no
+     * restriction, the layout adapts to any size and orientation (Android 16 large-screen rules).
+     */
+    private fun applyOrientationPolicy() {
+        requestedOrientation = if (resources.configuration.smallestScreenWidthDp >= 600) {
+            ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
+        } else {
+            ActivityInfo.SCREEN_ORIENTATION_USER_LANDSCAPE
+        }
+    }
+
+    override fun onConfigurationChanged(newConfig: Configuration) {
+        super.onConfigurationChanged(newConfig)
+        // e.g. a foldable being unfolded: re-evaluate (state is kept, activity not recreated)
+        applyOrientationPolicy()
+    }
+
+    private fun initializeMobileAdsOnce() {
+        if (!mobileAdsInitStarted.compareAndSet(false, true)) return
+        lifecycleScope.launch(Dispatchers.IO) {
+            try {
+                MobileAds.initialize(applicationContext) {}
+            } catch (t: Throwable) {
+                // Devices without Google Play services: game continues without ads.
+            }
+            withContext(Dispatchers.Main) { adManager.preload() }
+        }
+    }
+
+    private fun openPrivacyOptions() {
+        consentManager.showPrivacyOptionsForm(this) {
+            privacyOptionsRequired = consentManager.isPrivacyOptionsRequired
+            if (consentManager.canRequestAds) initializeMobileAdsOnce()
         }
     }
 
@@ -90,6 +140,13 @@ class MainActivity : ComponentActivity() {
 
     private fun updatePipParams(active: Boolean) {
         isGameplayActive = active
+        // Immersive play area during gameplay; bars come back with a swipe and in menus.
+        try {
+            val controller = WindowCompat.getInsetsController(window, window.decorView)
+            controller.systemBarsBehavior = WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
+            if (active) controller.hide(WindowInsetsCompat.Type.systemBars())
+            else controller.show(WindowInsetsCompat.Type.systemBars())
+        } catch (t: Throwable) {}
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S &&
             packageManager.hasSystemFeature(PackageManager.FEATURE_PICTURE_IN_PICTURE)
         ) {
@@ -119,11 +176,5 @@ class MainActivity : ComponentActivity() {
     ) {
         super.onPictureInPictureModeChanged(isInPictureInPictureMode, newConfig)
         isInPipMode = isInPictureInPictureMode
-    }
-
-    override fun onConfigurationChanged(newConfig: Configuration) {
-        super.onConfigurationChanged(newConfig)
-        // Ensure orientation remains locked to landscape across system configuration changes
-        requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE
     }
 }

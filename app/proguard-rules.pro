@@ -1,21 +1,15 @@
-# Add project specific ProGuard rules here.
-# You can control the set of applied configuration files using the
-# proguardFiles setting in build.gradle.
+# ARMASNAKE — R8 rules for the release build.
 #
-# For more details, see
-#   http://developer.android.com/guide/developing/tools/proguard.html
+# The app has no WebView JavaScript bridge, no JNI code of its own and no reflection-based
+# serialisation of app classes, so no app-wide -keep rules are needed. AndroidX, Compose,
+# Google Mobile Ads, UMP, Firebase, Moshi, Retrofit and OkHttp ship their own consumer
+# rules inside their AARs/JARs. Do NOT add broad rules like "-keep class com.example.** { *; }"
+# or "-dontobfuscate": they would defeat obfuscation (Play's DEX obfuscation warning).
 
-# If your project uses WebView with JS, uncomment the following
-# and specify the fully qualified class name to the JavaScript interface
-# class:
-#-keepclassmembers class fqcn.of.javascript.interface.for.webview {
-#   public *;
-#}
+# Keep line numbers so Play Console / Crashlytics stack traces are de-obfuscated precisely
+# with mapping.txt, while hiding the original source file names.
+-keepattributes SourceFile,LineNumberTable
+-renamesourcefileattribute SourceFile
 
-# Uncomment this to preserve the line number information for
-# debugging stack traces.
-#-keepattributes SourceFile,LineNumberTable
-
-# If you keep the line number information, uncomment this to
-# hide the original source file name.
-#-renamesourcefileattribute SourceFile
+# Generic signatures / annotations are needed by Moshi & Retrofit adapters if they are used.
+-keepattributes Signature,*Annotation*,InnerClasses,EnclosingMethod

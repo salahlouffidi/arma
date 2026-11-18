@@ -42,8 +42,12 @@ class GameOverSystemTest {
         for (i in 1..stage.maxAllowedLosses) {
             // Elapse eaten and invulnerability timers (eaten 1.0s + invulnerable 2.0s = 3.0s total; 80 * 0.05s = 4.0s)
             for (step in 1..80) {
+                engine.apples.clear()
                 engine.update(0.05f, 0f, 0f)
             }
+            // Make the hit deterministic: fruit spawns are random, and a star fruit landing on the
+            // idle armadillo would grant OVERDRIVE (a protected hit, not a loss).
+            engine.apples.clear()
             // Position snake directly at armadillo position
             engine.snakes[0] = engine.snakes[0].copy(headPos = engine.armadillo.pos)
             engine.update(0.016f, 0f, 0f)

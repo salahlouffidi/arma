@@ -116,7 +116,7 @@ class SoundManager(private val context: Context) {
     fun playStageTransitionMusic() {
         if (!isSoundEnabled) return
         try {
-            val resId = context.resources.getIdentifier("stage_transition", "raw", context.packageName)
+            val resId = R.raw.stage_transition
             if (resId != 0) {
                 transitionPlayer?.release()
                 transitionPlayer = MediaPlayer.create(context, resId).apply {
@@ -151,11 +151,41 @@ class SoundManager(private val context: Context) {
     // INDEPENDENT SOUND EFFECTS (SFX)
     // -------------------------------------------------------------
 
-    private fun playPcmSfx(samples: ShortArray) {
+    // Synthesised samples are generated once (off the main thread) and reused, instead of
+    // re-synthesising a new ShortArray on the UI thread for every gameplay event.
+    private val sfxCache = java.util.concurrent.ConcurrentHashMap<String, ShortArray>()
+    // AudioTrack instances are a limited native resource: cap simultaneous voices.
+    private val activeVoices = java.util.concurrent.atomic.AtomicInteger(0)
+
+    private fun playCached(key: String, build: () -> ShortArray) {
         if (!isSoundEnabled || sfxVolume <= 0.01f) return
         audioScope.launch {
+            val samples = sfxCache.getOrPut(key, build)
+            playPcmSfx(samples)
+        }
+    }
+
+    /** Releases every native audio resource. Call when the game screen leaves composition. */
+    fun release() {
+        stopMusic()
+        try {
+            transitionPlayer?.release()
+        } catch (e: Exception) {}
+        transitionPlayer = null
+        audioScope.coroutineContext[Job]?.cancel()
+        sfxCache.clear()
+    }
+
+    private fun playPcmSfx(samples: ShortArray) {
+        if (!isSoundEnabled || sfxVolume <= 0.01f) return
+        if (activeVoices.incrementAndGet() > MAX_VOICES) {
+            activeVoices.decrementAndGet()
+            return
+        }
+        audioScope.launch {
+            var sfxTrack: AudioTrack? = null
             try {
-                val sfxTrack = AudioTrack.Builder()
+                val track = AudioTrack.Builder()
                     .setAudioAttributes(
                         AudioAttributes.Builder()
                             .setUsage(AudioAttributes.USAGE_GAME)
@@ -172,23 +202,28 @@ class SoundManager(private val context: Context) {
                     .setBufferSizeInBytes(samples.size * 2)
                     .setTransferMode(AudioTrack.MODE_STATIC)
                     .build()
+                sfxTrack = track
 
-                sfxTrack.setVolume(sfxVolume)
-                sfxTrack.write(samples, 0, samples.size)
-                sfxTrack.play()
+                track.setVolume(sfxVolume)
+                track.write(samples, 0, samples.size)
+                track.play()
 
                 val durationMs = (samples.size.toDouble() / sampleRate * 1000).toLong() + 50
                 delay(durationMs)
-                sfxTrack.stop()
-                sfxTrack.release()
+                track.stop()
             } catch (e: Exception) {
                 // Safe
+            } finally {
+                try {
+                    sfxTrack?.release()
+                } catch (e: Exception) {}
+                activeVoices.decrementAndGet()
             }
         }
     }
 
     // 1. 🍎 fruit eaten: bright, crisp upward chime
-    fun playFruitEaten() {
+    fun playFruitEaten() = playCached("playFruitEaten") {
         val length = (sampleRate * 0.14).toInt()
         val samples = ShortArray(length)
         var phase = 0.0
@@ -200,11 +235,11 @@ class SoundManager(private val context: Context) {
             val v = (sin(phase) + 0.3 * sin(2.0 * phase)) * env
             samples[i] = (v * 28000).toInt().toShort()
         }
-        playPcmSfx(samples)
+        samples
     }
 
     // 2. ⚡ special fruit activated: sparkling ascending arpeggio
-    fun playSpecialFruitActivated() {
+    fun playSpecialFruitActivated() = playCached("playSpecialFruitActivated") {
         val length = (sampleRate * 0.35).toInt()
         val samples = ShortArray(length)
         var phase = 0.0
@@ -220,11 +255,11 @@ class SoundManager(private val context: Context) {
             val v = (sin(phase) + sparkle) * env
             samples[i] = (v * 30000).toInt().toShort()
         }
-        playPcmSfx(samples)
+        samples
     }
 
     // 3. 🦔 armadillo transformation / power activation: powerful ascending hyper-spin whoosh
-    fun playPowerActivated() {
+    fun playPowerActivated() = playCached("playPowerActivated") {
         val length = (sampleRate * 0.45).toInt()
         val samples = ShortArray(length)
         var phase = 0.0
@@ -237,11 +272,11 @@ class SoundManager(private val context: Context) {
             val v = sin(phase) * tremolo * env
             samples[i] = (v * 31000).toInt().toShort()
         }
-        playPcmSfx(samples)
+        samples
     }
 
     // 4. 🐍 snake collision: low rumble & dramatic thud
-    fun playSnakeCollision() {
+    fun playSnakeCollision() = playCached("playSnakeCollision") {
         val length = (sampleRate * 0.30).toInt()
         val samples = ShortArray(length)
         var phase = 0.0
@@ -254,11 +289,11 @@ class SoundManager(private val context: Context) {
             val v = (sin(phase) * 0.7 + noise) * env
             samples[i] = (v * 32000).toInt().toShort()
         }
-        playPcmSfx(samples)
+        samples
     }
 
     // 4b. 💀 game over defeat: dramatic descending minor cadence
-    fun playGameOver() {
+    fun playGameOver() = playCached("playGameOver") {
         val length = (sampleRate * 0.70).toInt()
         val samples = ShortArray(length)
         var phase = 0.0
@@ -273,11 +308,11 @@ class SoundManager(private val context: Context) {
             val v = sin(phase) * env
             samples[i] = (v * 28000).toInt().toShort()
         }
-        playPcmSfx(samples)
+        samples
     }
 
     // 5. 💥 protection activation / shield deflect: energetic metallic clang / laser deflection
-    fun playProtectionHit() {
+    fun playProtectionHit() = playCached("playProtectionHit") {
         val length = (sampleRate * 0.28).toInt()
         val samples = ShortArray(length)
         var phase1 = 0.0
@@ -292,11 +327,11 @@ class SoundManager(private val context: Context) {
             val v = (sin(phase1) + 0.6 * sin(phase2)) * env
             samples[i] = (v * 31000).toInt().toShort()
         }
-        playPcmSfx(samples)
+        samples
     }
 
     // 6. 🦔 new armadillo spawned: gentle pop & re-roll swirl
-    fun playNewArmadilloSpawned() {
+    fun playNewArmadilloSpawned() = playCached("playNewArmadilloSpawned") {
         val length = (sampleRate * 0.22).toInt()
         val samples = ShortArray(length)
         var phase = 0.0
@@ -308,11 +343,11 @@ class SoundManager(private val context: Context) {
             val v = sin(phase) * env
             samples[i] = (v * 26000).toInt().toShort()
         }
-        playPcmSfx(samples)
+        samples
     }
 
     // 7. ⭐ point gained: high clear coin chime
-    fun playPointGained() {
+    fun playPointGained() = playCached("playPointGained") {
         val length = (sampleRate * 0.18).toInt()
         val samples = ShortArray(length)
         var phase1 = 0.0
@@ -328,11 +363,11 @@ class SoundManager(private val context: Context) {
             val v = (sin(phase1) + 0.25 * sin(phase2)) * env
             samples[i] = (v * 29000).toInt().toShort()
         }
-        playPcmSfx(samples)
+        samples
     }
 
     // 8. 💔 point lost: descending buzzy tone
-    fun playPointLost() {
+    fun playPointLost() = playCached("playPointLost") {
         val length = (sampleRate * 0.25).toInt()
         val samples = ShortArray(length)
         var phase = 0.0
@@ -345,11 +380,11 @@ class SoundManager(private val context: Context) {
             val v = square * env
             samples[i] = (v * 24000).toInt().toShort()
         }
-        playPcmSfx(samples)
+        samples
     }
 
     // 9. 🎉 stage completed: victorious fanfare chord
-    fun playStageCompleted() {
+    fun playStageCompleted() = playCached("playStageCompleted") {
         val length = (sampleRate * 0.60).toInt()
         val samples = ShortArray(length)
         var phase = 0.0
@@ -364,11 +399,11 @@ class SoundManager(private val context: Context) {
             val v = (sin(phase) + 0.3 * sin(2.0 * phase)) * env
             samples[i] = (v * 30000).toInt().toShort()
         }
-        playPcmSfx(samples)
+        samples
     }
 
     // 10. 🏆 final stage completed: grand majestic multi-note champion fanfare
-    fun playFinalStageCompleted() {
+    fun playFinalStageCompleted() = playCached("playFinalStageCompleted") {
         val length = (sampleRate * 1.1).toInt()
         val samples = ShortArray(length)
         val melody = doubleArrayOf(523.25, 659.25, 783.99, 659.25, 1046.50, 1318.51)
@@ -383,11 +418,11 @@ class SoundManager(private val context: Context) {
             val v = (sin(phase) + 0.4 * sin(2.0 * phase)) * env
             samples[i] = (v * 32000).toInt().toShort()
         }
-        playPcmSfx(samples)
+        samples
     }
 
     // 11. 🖱️ menu button: tactile crisp click
-    fun playMenuClick() {
+    fun playMenuClick() = playCached("playMenuClick") {
         val length = (sampleRate * 0.04).toInt()
         val samples = ShortArray(length)
         var phase = 0.0
@@ -399,11 +434,11 @@ class SoundManager(private val context: Context) {
             val v = sin(phase) * env
             samples[i] = (v * 24000).toInt().toShort()
         }
-        playPcmSfx(samples)
+        samples
     }
 
     // 12. 🎮 stage selection: tech electronic swoosh / confirm
-    fun playStageSelected() {
+    fun playStageSelected() = playCached("playStageSelected") {
         val length = (sampleRate * 0.16).toInt()
         val samples = ShortArray(length)
         var phase = 0.0
@@ -415,11 +450,11 @@ class SoundManager(private val context: Context) {
             val v = (sin(phase) + 0.25 * sin(2.0 * phase)) * env
             samples[i] = (v * 27000).toInt().toShort()
         }
-        playPcmSfx(samples)
+        samples
     }
 
     // 13. 🪵 wall bump: short tactile wooden pop/thud
-    fun playWallBump() {
+    fun playWallBump() = playCached("playWallBump") {
         val length = (sampleRate * 0.08).toInt()
         val samples = ShortArray(length)
         var phase = 0.0
@@ -431,11 +466,11 @@ class SoundManager(private val context: Context) {
             val v = sin(phase) * env
             samples[i] = (v * 26000).toInt().toShort()
         }
-        playPcmSfx(samples)
+        samples
     }
 
     // 14. 🌋 lava hit: sizzling sizzle/crackle burst
-    fun playLavaHit() {
+    fun playLavaHit() = playCached("playLavaHit") {
         val length = (sampleRate * 0.25).toInt()
         val samples = ShortArray(length)
         var phase = 0.0
@@ -448,12 +483,13 @@ class SoundManager(private val context: Context) {
             val v = (sin(phase) * 0.4 + noise) * env
             samples[i] = (v * 29000).toInt().toShort()
         }
-        playPcmSfx(samples)
+        samples
     }
 
     companion object {
         private const val KEY_SOUND_ENABLED = "sound_master_enabled"
         private const val KEY_MUSIC_VOL = "music_volume"
         private const val KEY_SFX_VOL = "sfx_volume"
+        private const val MAX_VOICES = 8
     }
 }

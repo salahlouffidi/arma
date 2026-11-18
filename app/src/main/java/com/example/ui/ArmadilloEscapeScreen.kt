@@ -31,6 +31,7 @@ import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
+import androidx.compose.foundation.layout.safeDrawingPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
@@ -69,6 +70,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.withFrameNanos
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.AbsoluteAlignment
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -95,6 +97,7 @@ import com.example.game.MatchConfig
 import com.example.game.CharacterId
 import com.example.game.RoleType
 import com.example.game.TableRenderer
+import androidx.compose.ui.graphics.drawscope.withTransform
 import com.example.game.Vector2
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
@@ -123,26 +126,33 @@ fun ArmadilloEscapeScreen(
     isInPip: Boolean = false,
     onEnterPip: (() -> Unit)? = null,
     onSetGameplayActive: ((Boolean) -> Unit)? = null,
-    adManager: AdManager? = null
+    adManager: AdManager? = null,
+    privacyOptionsRequired: Boolean = false,
+    onOpenPrivacyOptions: () -> Unit = {}
 ) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
 
-    val effectiveAdManager = remember(adManager) { adManager ?: AdManager(context.applicationContext) }
-    LaunchedEffect(effectiveAdManager) {
-        effectiveAdManager.preload()
-    }
+    // Ads are created/initialised by MainActivity after UMP consent; without one we run ad-free.
+    val effectiveAdManager = remember(adManager) { adManager ?: AdManager(context.applicationContext) { false } }
 
     val haptics = remember { HapticFeedbackHelper(context) }
     val progressManager = remember { StageProgressManager(context) }
     val soundManager = remember { SoundManager(context) }
 
-    var currentScreen by remember { mutableStateOf(GameScreenState.INTRO) }
+    // Survives activity recreation (font scale/locale change, process death). An interrupted
+    // round is restored to the round list instead of replaying the intro.
+    var currentScreen by rememberSaveable(
+        stateSaver = androidx.compose.runtime.saveable.Saver<GameScreenState, String>(
+            save = { if (it == GameScreenState.GAMEPLAY) GameScreenState.STAGE_SELECT.name else it.name },
+            restore = { runCatching { GameScreenState.valueOf(it) }.getOrDefault(GameScreenState.MAIN_MENU) }
+        )
+    ) { mutableStateOf(GameScreenState.INTRO) }
     var activeMatchConfig by remember { mutableStateOf(MatchConfig.solo()) }
     var showAudioSettings by remember { mutableStateOf(false) }
 
     var highestUnlockedStage by remember { mutableIntStateOf(progressManager.getHighestUnlockedStage()) }
-    var currentStageId by remember { mutableIntStateOf(1) }
+    var currentStageId by rememberSaveable { mutableIntStateOf(1) }
     var showStageSelector by remember { mutableStateOf(false) }
     var stageClearDialogData by remember { mutableStateOf<StageClearData?>(null) }
     var gameOverDialogData by remember { mutableStateOf<GameOverData?>(null) }
@@ -298,7 +308,7 @@ fun ArmadilloEscapeScreen(
     // Audio lifecycle
     DisposableEffect(Unit) {
         onDispose {
-            soundManager.stopMusic()
+            soundManager.release()
         }
     }
 
@@ -373,7 +383,8 @@ fun ArmadilloEscapeScreen(
                 onOpenGameModeSelect = {
                     activeMatchConfig = MatchConfig.solo()
                     currentScreen = GameScreenState.STAGE_SELECT
-                }
+                },
+                onOpenPrivacyOptions = if (privacyOptionsRequired) onOpenPrivacyOptions else null
             )
         }
         GameScreenState.GAME_MODE_SELECT -> {
@@ -440,8 +451,8 @@ fun ArmadilloEscapeScreen(
                 modifier = Modifier
                     .fillMaxSize()
                     .background(Color(0xFF140D08))
-                    .statusBarsPadding()
-                    .navigationBarsPadding()
+                    // Android 15+ edge-to-edge: keep HUD/joysticks clear of bars AND cutouts
+                    .safeDrawingPadding()
             ) {
         val density = LocalDensity.current
         val screenWidth = constraints.maxWidth.toFloat()
@@ -472,59 +483,71 @@ fun ArmadilloEscapeScreen(
             @Suppress("UNUSED_VARIABLE")
             val currentTick = tick
 
-            // 1. Draw Fixed Themed Table
-            TableRenderer.drawTable(
-                scope = this,
-                center = tableCenter,
-                halfW = tableHalfW,
-                halfH = tableHalfH,
-                theme = gameEngine.currentStage.theme
+            val shake = TableRenderer.updateFx(
+                buildList {
+                    add(gameEngine.armadillo to false)
+                    gameEngine.armadillo2?.let { add(it to true) }
+                },
+                gameEngine.apples
             )
+            withTransform({ translate(shake.x, shake.y) }) {
+                // 1. Draw Fixed Themed Table
+                TableRenderer.drawTable(
+                    scope = this,
+                    center = tableCenter,
+                    halfW = tableHalfW,
+                    halfH = tableHalfH,
+                    theme = gameEngine.currentStage.theme
+                )
 
-            // 1b. Draw Obstacles
-            TableRenderer.drawObstacles(
-                scope = this,
-                obstacles = gameEngine.obstacles,
-                boardCenter = tableCenter
-            )
+                // 1b. Draw Obstacles
+                TableRenderer.drawObstacles(
+                    scope = this,
+                    obstacles = gameEngine.obstacles,
+                    boardCenter = tableCenter
+                )
 
-            // 2. Draw Apples
-            TableRenderer.drawApples(
-                scope = this,
-                apples = gameEngine.apples,
-                boardCenter = tableCenter
-            )
+                TableRenderer.drawTrails(this, tableCenter)
 
-            // 3. Draw 3D Armadillos
-            TableRenderer.drawArmadillo(
-                scope = this,
-                armadillo = gameEngine.armadillo,
-                boardCenter = tableCenter,
-                isBlue = false
-            )
-            val a2 = gameEngine.armadillo2
-            if (a2 != null) {
+                // 2. Draw Apples
+                TableRenderer.drawApples(
+                    scope = this,
+                    apples = gameEngine.apples,
+                    boardCenter = tableCenter
+                )
+
+                // 3. Draw 3D Armadillos
                 TableRenderer.drawArmadillo(
                     scope = this,
-                    armadillo = a2,
+                    armadillo = gameEngine.armadillo,
                     boardCenter = tableCenter,
-                    isBlue = true
+                    isBlue = false
+                )
+                val a2 = gameEngine.armadillo2
+                if (a2 != null) {
+                    TableRenderer.drawArmadillo(
+                        scope = this,
+                        armadillo = a2,
+                        boardCenter = tableCenter,
+                        isBlue = true
+                    )
+                }
+
+                // 4. Draw 3D Snakes
+                TableRenderer.drawSnakes(
+                    scope = this,
+                    snakes = gameEngine.snakes,
+                    boardCenter = tableCenter
+                )
+
+                // 5. Draw Particles
+                TableRenderer.drawParticles(
+                    scope = this,
+                    particles = gameEngine.particles,
+                    boardCenter = tableCenter
                 )
             }
-
-            // 4. Draw 3D Snakes
-            TableRenderer.drawSnakes(
-                scope = this,
-                snakes = gameEngine.snakes,
-                boardCenter = tableCenter
-            )
-
-            // 5. Draw Particles
-            TableRenderer.drawParticles(
-                scope = this,
-                particles = gameEngine.particles,
-                boardCenter = tableCenter
-            )
+            TableRenderer.drawFxOverlay(this, tableCenter + shake)
         }
 
         if (isInPip) {
@@ -835,7 +858,7 @@ fun ArmadilloEscapeScreen(
                         }
                     }
 
-                    Button(
+                    ProStyledButton(
                         onClick = {
                             showStageSelector = true
                             haptics.click()
@@ -895,7 +918,7 @@ fun ArmadilloEscapeScreen(
                 ) {
                     if (isSingleJoystickRight) {
                         // When joystick is on the right, place ROUNDS button on the left
-                        Button(
+                        ProStyledButton(
                             onClick = {
                                 showStageSelector = true
                                 haptics.click()
@@ -979,7 +1002,7 @@ fun ArmadilloEscapeScreen(
                         }
 
                         // Central / Right Action: ROUNDS Button
-                        Button(
+                        ProStyledButton(
                             onClick = {
                                 showStageSelector = true
                                 haptics.click()
@@ -1103,7 +1126,7 @@ fun ArmadilloEscapeScreen(
                 }
 
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Button(
+                    ProStyledButton(
                         onClick = {
                             currentScreen = GameScreenState.MULTIPLAYER_CONFIG
                             haptics.click()
@@ -1126,7 +1149,7 @@ fun ArmadilloEscapeScreen(
                         )
                     }
 
-                    Button(
+                    ProStyledButton(
                         onClick = {
                             showStageSelector = true
                             haptics.click()
@@ -1199,7 +1222,7 @@ fun ArmadilloEscapeScreen(
                 data = goData,
                 statusMessage = adStatusMessage,
                 onRetryRound = {
-                    val activity = context as? Activity
+                    val activity = context.findActivity()
                     gameOverDialogData = null
                     adStatusMessage = null
                     val doResetAndStart = {
@@ -1227,7 +1250,7 @@ fun ArmadilloEscapeScreen(
                     }
                 },
                 onWatchAdSecondChance = {
-                    val activity = context as? Activity
+                    val activity = context.findActivity()
                     if (activity != null) {
                         effectiveAdManager.showRewarded(
                             activity = activity,
@@ -1246,7 +1269,7 @@ fun ArmadilloEscapeScreen(
                                 gameEngine.resetRound()
                             },
                             onUnavailable = {
-                                adStatusMessage = "Rewarded test ad unavailable. Tap RETRY!"
+                                adStatusMessage = "Ad unavailable right now. Tap RETRY!"
                             }
                         )
                     } else {
@@ -1553,7 +1576,7 @@ private fun StageClearDialog(
                 // Action Buttons
                 if (data.stage.id < 16) {
                     val next = StageConfig.getStage(data.stage.id + 1)
-                    Button(
+                    ProStyledButton(
                         onClick = onNextStage,
                         colors = ButtonDefaults.buttonColors(
                             containerColor = Color(0xFFD4AF37),
@@ -1573,7 +1596,7 @@ private fun StageClearDialog(
                     }
                     Spacer(modifier = Modifier.height(8.dp))
                 } else {
-                    Button(
+                    ProStyledButton(
                         onClick = onRetryStage,
                         colors = ButtonDefaults.buttonColors(
                             containerColor = Color(0xFFFFD700),
@@ -1598,7 +1621,7 @@ private fun StageClearDialog(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
-                    Button(
+                    ProStyledButton(
                         onClick = onRetryStage,
                         colors = ButtonDefaults.buttonColors(
                             containerColor = Color(0xFF3E2516),
@@ -1613,7 +1636,7 @@ private fun StageClearDialog(
                         Text(text = "↺ RETRY ROUND", fontSize = 11.sp, fontWeight = FontWeight.Bold)
                     }
 
-                    Button(
+                    ProStyledButton(
                         onClick = onSelectOther,
                         colors = ButtonDefaults.buttonColors(
                             containerColor = Color(0xFF2C190F),
@@ -1833,7 +1856,7 @@ private fun GameOverDialog(
                         horizontalAlignment = Alignment.CenterHorizontally
                     ) {
                         // 1. Primary RETRY button (Prominent, Gold, Always Visible)
-                        Button(
+                        ProStyledButton(
                             onClick = onRetryRound,
                             colors = ButtonDefaults.buttonColors(
                                 containerColor = Color(0xFFD4AF37),
@@ -1854,7 +1877,7 @@ private fun GameOverDialog(
                         }
 
                         // 2. Optional Rewarded Ad Button (Second Chance)
-                        Button(
+                        ProStyledButton(
                             onClick = onWatchAdSecondChance,
                             colors = ButtonDefaults.buttonColors(
                                 containerColor = Color(0xFF1B4332),
@@ -1876,7 +1899,7 @@ private fun GameOverDialog(
                         }
 
                         // 3. Secondary ROUNDS button
-                        Button(
+                        ProStyledButton(
                             onClick = onExitToRounds,
                             colors = ButtonDefaults.buttonColors(
                                 containerColor = Color(0xFF2C190F),
@@ -1901,4 +1924,11 @@ private fun GameOverDialog(
             }
         }
     }
+}
+
+/** Unwraps ContextWrapper chains so ads always receive the hosting Activity. */
+private tailrec fun android.content.Context.findActivity(): Activity? = when (this) {
+    is Activity -> this
+    is android.content.ContextWrapper -> baseContext.findActivity()
+    else -> null
 }

@@ -49,11 +49,7 @@ fun IntroScreen(
     var videoViewRef by remember { mutableStateOf<VideoView?>(null) }
 
     val rawVideoUri = remember {
-        val resId = context.resources.getIdentifier(
-            "louffi_edition_logo_intro_animation_202609082217",
-            "raw",
-            context.packageName
-        )
+        val resId = com.example.R.raw.louffi_edition_logo_intro_animation_202609082217
         if (resId != 0) {
             Uri.parse("android.resource://${context.packageName}/$resId")
         } else {
