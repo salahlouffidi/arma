@@ -191,6 +191,78 @@ object TableRenderer {
                 rivetColor = Color(0xFFD50000),
                 rivetHighlight = Color(0xFFFFFFFF)
             )
+            StageTheme.NEON -> TableThemeColors(
+                railColors = listOf(Color(0xFF2A1B4D), Color(0xFF160E2E), Color(0xFF221640), Color(0xFF0B0619)),
+                railHighlight = Color(0x60FF2BD6),
+                plankColors = listOf(
+                    Color(0xFF151230), Color(0xFF12102A), Color(0xFF181535), Color(0xFF110E26),
+                    Color(0xFF161333), Color(0xFF13112C), Color(0xFF191637), Color(0xFF100D24)
+                ),
+                seamColor = Color(0x9000E5FF),
+                seamHighlight = Color(0x30FF2BD6),
+                grainLight = Color(0x10FFFFFF),
+                grainDark = Color(0x18000000),
+                inlayOuter = Color(0x6600E5FF),
+                inlayInner = Color(0x55FF2BD6),
+                diamondColor = Color(0x55FF2BD6),
+                cornerColors = listOf(Color(0xFF80FFFF), Color(0xFF00E5FF), Color(0xFF6A00F4)),
+                rivetColor = Color(0xFF2A0050),
+                rivetHighlight = Color(0xFFFF9CF0)
+            )
+            StageTheme.OCEAN -> TableThemeColors(
+                railColors = listOf(Color(0xFF0E5A6B), Color(0xFF083E4A), Color(0xFF0A4C5A), Color(0xFF042A33)),
+                railHighlight = Color(0x5080FFF4),
+                plankColors = listOf(
+                    Color(0xFF1C7A86), Color(0xFF19707C), Color(0xFF1F818D), Color(0xFF176874),
+                    Color(0xFF1B7682), Color(0xFF1E7E8A), Color(0xFF186C78), Color(0xFF1D7C88)
+                ),
+                seamColor = Color(0x60043340),
+                seamHighlight = Color(0x2080FFF4),
+                grainLight = Color(0x14FFFFFF),
+                grainDark = Color(0x14003040),
+                inlayOuter = Color(0x5080FFF4),
+                inlayInner = Color(0x40FFE0B2),
+                diamondColor = Color(0x40FFE0B2),
+                cornerColors = listOf(Color(0xFFFFE0B2), Color(0xFFFF8A65), Color(0xFF8D3B26)),
+                rivetColor = Color(0xFF3E1B10),
+                rivetHighlight = Color(0xFFFFF3E0)
+            )
+            StageTheme.CANDY -> TableThemeColors(
+                railColors = listOf(Color(0xFFFF6FB5), Color(0xFFD63F8C), Color(0xFFF0559F), Color(0xFFA82768)),
+                railHighlight = Color(0x70FFFFFF),
+                plankColors = listOf(
+                    Color(0xFFFFE3EE), Color(0xFFFFD6E7), Color(0xFFFFEAF2), Color(0xFFFFD0E3),
+                    Color(0xFFFFE0EC), Color(0xFFFFDCEA), Color(0xFFFFE6F0), Color(0xFFFFD3E5)
+                ),
+                seamColor = Color(0x50C2185B),
+                seamHighlight = Color(0x40FFFFFF),
+                grainLight = Color(0x20FFFFFF),
+                grainDark = Color(0x10C2185B),
+                inlayOuter = Color(0x60FF4081),
+                inlayInner = Color(0x5040C4FF),
+                diamondColor = Color(0x5040C4FF),
+                cornerColors = listOf(Color(0xFFFFFFFF), Color(0xFF80D8FF), Color(0xFF0091EA)),
+                rivetColor = Color(0xFF880E4F),
+                rivetHighlight = Color(0xFFFFFFFF)
+            )
+            StageTheme.COSMOS -> TableThemeColors(
+                railColors = listOf(Color(0xFF3A3F5C), Color(0xFF1C1F33), Color(0xFF2C3048), Color(0xFF0D0F1C)),
+                railHighlight = Color(0x50B3C7FF),
+                plankColors = listOf(
+                    Color(0xFF0C0E1F), Color(0xFF0A0C1A), Color(0xFF0E1124), Color(0xFF090B18),
+                    Color(0xFF0D0F21), Color(0xFF0B0D1C), Color(0xFF0F1226), Color(0xFF080A16)
+                ),
+                seamColor = Color(0x507C4DFF),
+                seamHighlight = Color(0x20B3C7FF),
+                grainLight = Color(0x08FFFFFF),
+                grainDark = Color(0x10000000),
+                inlayOuter = Color(0x60B388FF),
+                inlayInner = Color(0x5040C4FF),
+                diamondColor = Color(0x50B388FF),
+                cornerColors = listOf(Color(0xFFE8EAF6), Color(0xFF9FA8DA), Color(0xFF303F9F)),
+                rivetColor = Color(0xFF1A237E),
+                rivetHighlight = Color(0xFFFFFFFF)
+            )
         }
     }
 
@@ -290,6 +362,10 @@ object TableRenderer {
         StageTheme.ICE -> Backdrop(Color(0xFF0D3440), Color(0xFF02090D), Color(0x30FFFFFF))
         StageTheme.DARK_TEMPLE -> Backdrop(Color(0xFF221330), Color(0xFF050208), Color(0x20E6C8FF))
         StageTheme.FINAL_ARENA -> Backdrop(Color(0xFF3A2208), Color(0xFF080401), Color(0x2EFFE7A0))
+        StageTheme.NEON -> Backdrop(Color(0xFF240B45), Color(0xFF04020B), Color(0x1EFF6BEA))
+        StageTheme.OCEAN -> Backdrop(Color(0xFF0B4256), Color(0xFF010B10), Color(0x30C8FFF8))
+        StageTheme.CANDY -> Backdrop(Color(0xFF5A1F45), Color(0xFF12040C), Color(0x30FFFFFF))
+        StageTheme.COSMOS -> Backdrop(Color(0xFF1C1640), Color(0xFF010104), Color(0x16C8D2FF))
     }
 
     private class Board(
@@ -749,6 +825,67 @@ object TableRenderer {
                     cornerRadius = CornerRadius(8f, 8f),
                     style = Stroke(1.2f, pathEffect = PathEffect.dashPathEffect(floatArrayOf(10f, 6f)))
                 )
+            }
+            StageTheme.NEON -> {
+                // glowing grid + scanning light bar
+                val step = 64f
+                val pulse = 0.55f + 0.45f * sin(t * 2f)
+                var gx = left + step
+                while (gx < left + width) {
+                    drawLine(Color(0xFF00E5FF).copy(alpha = 0.10f), Offset(gx, top), Offset(gx, top + height), strokeWidth = 6f)
+                    drawLine(Color(0xFF00E5FF).copy(alpha = 0.35f * pulse), Offset(gx, top), Offset(gx, top + height), strokeWidth = 1.2f)
+                    gx += step
+                }
+                var gy = top + step
+                while (gy < top + height) {
+                    drawLine(Color(0xFFFF2BD6).copy(alpha = 0.10f), Offset(left, gy), Offset(left + width, gy), strokeWidth = 6f)
+                    drawLine(Color(0xFFFF2BD6).copy(alpha = 0.30f * pulse), Offset(left, gy), Offset(left + width, gy), strokeWidth = 1.2f)
+                    gy += step
+                }
+                val scan = top + ((t * 0.25f) % 1f) * height
+                drawRect(
+                    Brush.verticalGradient(listOf(Color.Transparent, Color(0x3300E5FF), Color.Transparent), startY = scan - 40f, endY = scan + 40f),
+                    topLeft = Offset(left, scan - 40f), size = Size(width, 80f)
+                )
+            }
+            StageTheme.OCEAN -> {
+                // animated caustics + rising bubbles
+                for (k in 0 until 9) {
+                    val p = Path()
+                    val y0 = top + height * (k + 0.5f) / 9f
+                    p.moveTo(left, y0)
+                    var x = left
+                    while (x <= left + width) {
+                        x += 24f
+                        p.lineTo(x, y0 + sin(x * 0.012f + t * 1.3f + k) * 14f + sin(x * 0.031f - t * 0.9f) * 6f)
+                    }
+                    drawPath(p, Color(0xFFC8FFF8).copy(alpha = 0.10f), style = Stroke(5f, cap = StrokeCap.Round))
+                    drawPath(p, Color(0xFFFFFFFF).copy(alpha = 0.12f), style = Stroke(1.4f, cap = StrokeCap.Round))
+                }
+                for ((p0, sz, ph) in layout.specks.take(22)) {
+                    val rise = ((t * 0.08f + ph) % 1f)
+                    val p = Offset(p0.x + sin(t * 2f + ph * 9f) * 6f, top + height - rise * height)
+                    drawCircle(Color.White.copy(alpha = 0.35f * (1f - rise)), radius = sz * 1.6f, center = p, style = Stroke(1.1f))
+                }
+            }
+            StageTheme.CANDY -> {
+                val cols = listOf(Color(0xFFFF4081), Color(0xFF40C4FF), Color(0xFFFFEB3B), Color(0xFF69F0AE), Color(0xFFB388FF))
+                for ((i2, sp) in layout.specks.withIndex()) {
+                    val (p, sz, ph) = sp
+                    rotate(ph * 360f, pivot = p) {
+                        drawRoundRect(cols[i2 % cols.size].copy(alpha = 0.85f), topLeft = p - Offset(sz * 2.2f, sz * 0.7f), size = Size(sz * 4.4f, sz * 1.4f), cornerRadius = CornerRadius(sz, sz))
+                    }
+                }
+            }
+            StageTheme.COSMOS -> {
+                // nebula clouds + twinkling stars
+                drawCircle(Brush.radialGradient(listOf(Color(0x447C4DFF), Color.Transparent), center = Offset(left + width * 0.25f, top + height * 0.3f), radius = height * 0.6f), radius = height * 0.6f, center = Offset(left + width * 0.25f, top + height * 0.3f))
+                drawCircle(Brush.radialGradient(listOf(Color(0x3300B0FF), Color.Transparent), center = Offset(left + width * 0.75f, top + height * 0.7f), radius = height * 0.55f), radius = height * 0.55f, center = Offset(left + width * 0.75f, top + height * 0.7f))
+                for ((p, sz, ph) in layout.specks) {
+                    val tw = 0.35f + 0.65f * (0.5f + 0.5f * sin(t * 3f + ph * 12f))
+                    drawCircle(Color.White.copy(alpha = tw), radius = sz * 0.7f, center = p)
+                    if (sz > 2.6f) sparkle(p, sz * 2f, Color.White.copy(alpha = tw * 0.8f))
+                }
             }
             else -> Unit
         }
@@ -1257,18 +1394,28 @@ object TableRenderer {
         light = Color(0xFF9CCC65), mid = Color(0xFF43A047), dark = Color(0xFF1B5E20), outline = Color(0xFF0A2E0D),
         pattern = Color(0xFF1B3A12), patternEdge = Color(0xFFFFD54F), belly = Color(0xFFE6EE9C), eye = Color(0xFFFFD54F)
     )
+    private val RED_SNAKE = SnakePalette(
+        light = Color(0xFFFFAB91), mid = Color(0xFFE64A19), dark = Color(0xFF7F1D06), outline = Color(0xFF2E0A02),
+        pattern = Color(0xFF3E0E03), patternEdge = Color(0xFFFFD54F), belly = Color(0xFFFFE0B2), eye = Color(0xFFFFEA00)
+    )
     private val PURPLE_SNAKE = SnakePalette(
         light = Color(0xFFE1A8F0), mid = Color(0xFF9C27B0), dark = Color(0xFF4A148C), outline = Color(0xFF1C0533),
         pattern = Color(0xFF2A0845), patternEdge = Color(0xFFFF80AB), belly = Color(0xFFF8BBD0), eye = Color(0xFFFF1F8E)
     )
 
+    private val FROZEN_SNAKE = SnakePalette(
+        light = Color(0xFFE0F7FF), mid = Color(0xFF7FD3F7), dark = Color(0xFF2B6E9C), outline = Color(0xFF0B2A44),
+        pattern = Color(0xFF1C4E78), patternEdge = Color(0xFFFFFFFF), belly = Color(0xFFE1F5FE), eye = Color(0xFF80D8FF)
+    )
+
     fun drawSnakes(
         scope: DrawScope,
         snakes: List<SnakeState>,
-        boardCenter: Offset
+        boardCenter: Offset,
+        frozen: Boolean = false
     ) {
         for (i in snakes.indices) {
-            drawSnake(scope, snakes[i], boardCenter, snakeIndex = i)
+            drawSnake(scope, snakes[i], boardCenter, snakeIndex = i, frozen = frozen)
         }
     }
 
@@ -1276,9 +1423,15 @@ object TableRenderer {
         scope: DrawScope,
         snake: SnakeState,
         boardCenter: Offset,
-        snakeIndex: Int = 0
+        snakeIndex: Int = 0,
+        frozen: Boolean = false
     ) = with(scope) {
-        val pal = if (snakeIndex % 2 == 1) PURPLE_SNAKE else GREEN_SNAKE
+        val pal = when {
+            frozen -> FROZEN_SNAKE
+            snakeIndex % 3 == 1 -> PURPLE_SNAKE
+            snakeIndex % 3 == 2 -> RED_SNAKE
+            else -> GREEN_SNAKE
+        }
         val headX = boardCenter.x + snake.headPos.x
         val headY = boardCenter.y + snake.headPos.y
 
@@ -1554,11 +1707,7 @@ object TableRenderer {
             )
 
             when (apple.fruitType) {
-                FruitType.REGULAR_APPLE -> {
-                    val r = 16f
-                    shinyFruitBody(ax, curY, r, Color(0xFFFF8A80), Color(0xFFE53935), Color(0xFF8E0000), Color(0x66FFB199))
-                    stemAndLeaf(ax, curY, r, Color(0xFF6D4C41), Color(0xFF7CB342), Color(0xFF2E7D32))
-                }
+                FruitType.REGULAR_APPLE -> drawFruitKind(this, apple.kind, ax, curY)
                 FruitType.ESCAPE_GOLDEN -> {
                     val pulse = sin(apple.sparkleTimer * 8f) * 1.2f
                     val r = 17f + pulse
@@ -1604,6 +1753,138 @@ object TableRenderer {
                     drawCircle(Color.White, radius = r * 0.13f, center = Offset(ax - r * 0.35f, curY - r * 0.4f))
                 }
             }
+        }
+    }
+
+    private fun drawFruitKind(scope: DrawScope, kind: Int, x: Float, y: Float) = with(scope) {
+        when (kind) {
+            1 -> { // orange
+                val r = 15.5f
+                drawCircle(Color(0xFF8A3B00), radius = r + 1.2f, center = Offset(x, y))
+                drawCircle(
+                    Brush.radialGradient(listOf(Color(0xFFFFD180), Color(0xFFFF9100), Color(0xFFC25100)), center = Offset(x + LIGHT_X * r * 0.45f, y + LIGHT_Y * r * 0.45f), radius = r * 1.5f),
+                    radius = r, center = Offset(x, y)
+                )
+                for (k in 0 until 14) {
+                    val a = k * 0.449f
+                    drawCircle(Color(0x33FFFFFF), radius = 1f, center = Offset(x + cos(a) * r * 0.62f, y + sin(a) * r * 0.62f))
+                }
+                drawCircle(Color.White.copy(alpha = 0.8f), radius = r * 0.16f, center = Offset(x - r * 0.42f, y - r * 0.42f))
+                drawCircle(Color(0xFF558B2F), radius = 2.4f, center = Offset(x, y - r + 1.5f))
+                val leaf = Path().apply { moveTo(x, y - r + 1f); quadraticTo(x + 9f, y - r - 7f, x + 13f, y - r - 1f); quadraticTo(x + 6f, y - r + 2f, x, y - r + 1f) }
+                drawPath(leaf, Color(0xFF66BB6A))
+            }
+            2 -> { // grapes
+                val g = listOf(Offset(-7f, -6f), Offset(0f, -8f), Offset(7f, -6f), Offset(-4f, 1f), Offset(4f, 1f), Offset(0f, 8f))
+                for (o in g) {
+                    val c = Offset(x + o.x, y + o.y)
+                    drawCircle(Color(0xFF2A0845), radius = 6.8f, center = c)
+                    drawCircle(Brush.radialGradient(listOf(Color(0xFFE1BEE7), Color(0xFF8E24AA), Color(0xFF4A148C)), center = c + Offset(-2f, -2f), radius = 8f), radius = 6f, center = c)
+                    drawCircle(Color.White.copy(alpha = 0.7f), radius = 1.3f, center = c + Offset(-2f, -2.2f))
+                }
+                drawLine(Color(0xFF6D4C41), Offset(x, y - 13f), Offset(x + 2f, y - 20f), strokeWidth = 2.4f, cap = StrokeCap.Round)
+                val leaf = Path().apply { moveTo(x + 1f, y - 16f); quadraticTo(x + 10f, y - 24f, x + 15f, y - 16f); quadraticTo(x + 8f, y - 12f, x + 1f, y - 16f) }
+                drawPath(leaf, Color(0xFF7CB342))
+            }
+            3 -> { // cherries
+                for ((i, o) in listOf(Offset(-7f, 3f), Offset(7f, 5f)).withIndex()) {
+                    val c = Offset(x + o.x, y + o.y)
+                    drawLine(Color(0xFF558B2F), c - Offset(0f, 7f), Offset(x + 2f, y - 16f), strokeWidth = 1.8f, cap = StrokeCap.Round)
+                    drawCircle(Color(0xFF4A0000), radius = 8.4f, center = c)
+                    drawCircle(Brush.radialGradient(listOf(Color(0xFFFF8A80), Color(0xFFD50000), Color(0xFF6A0000)), center = c + Offset(-3f, -3f), radius = 10f), radius = 7.6f, center = c)
+                    drawCircle(Color.White.copy(alpha = 0.85f), radius = 1.6f, center = c + Offset(-3f, -3f))
+                    if (i == 0) {
+                        val leaf = Path().apply { moveTo(x + 2f, y - 16f); quadraticTo(x + 12f, y - 22f, x + 16f, y - 14f); quadraticTo(x + 9f, y - 12f, x + 2f, y - 16f) }
+                        drawPath(leaf, Color(0xFF7CB342))
+                    }
+                }
+            }
+            4 -> { // watermelon slice (worth 3)
+                val r = 18f
+                val rind = Path().apply { moveTo(x - r, y - 2f); arcTo(androidx.compose.ui.geometry.Rect(x - r, y - r - 2f, x + r, y + r - 2f), 180f, -180f, false); close() }
+                drawPath(rind, Color(0xFF1B5E20))
+                val flesh = Path().apply { moveTo(x - r + 3f, y - 2f); arcTo(androidx.compose.ui.geometry.Rect(x - r + 3f, y - r + 1f, x + r - 3f, y + r - 5f), 180f, -180f, false); close() }
+                drawPath(flesh, Color(0xFFDCEDC8))
+                val red = Path().apply { moveTo(x - r + 5.5f, y - 2f); arcTo(androidx.compose.ui.geometry.Rect(x - r + 5.5f, y - r + 3.5f, x + r - 5.5f, y + r - 7.5f), 180f, -180f, false); close() }
+                drawPath(red, Brush.verticalGradient(listOf(Color(0xFFFF5252), Color(0xFFD50000)), startY = y - 2f, endY = y + r))
+                for (k in 0 until 5) {
+                    val a = 0.35f + k * 0.6f
+                    drawOval(Color(0xFF1A1A1A), topLeft = Offset(x + cos(a) * 8f - 1.2f, y + sin(a) * 6f), size = Size(2.4f, 3.6f))
+                }
+                drawLine(Color.White.copy(alpha = 0.5f), Offset(x - r + 3f, y - 2f), Offset(x + r - 3f, y - 2f), strokeWidth = 1.2f)
+            }
+            else -> {
+                val r = 16f
+                shinyFruitBody(x, y, r, Color(0xFFFF8A80), Color(0xFFE53935), Color(0xFF8E0000), Color(0x66FFB199))
+                stemAndLeaf(x, y, r, Color(0xFF6D4C41), Color(0xFF7CB342), Color(0xFF2E7D32))
+            }
+        }
+    }
+
+    /** Power-up orbs: big readable icons with a pulsing halo and a fading countdown ring. */
+    fun drawPowerUps(scope: DrawScope, items: List<PowerUpItem>, boardCenter: Offset) = with(scope) {
+        for (p in items) {
+            val c = Offset(boardCenter.x + p.pos.x, boardCenter.y + p.pos.y - 6f - sin(p.phase * 3f) * 4f)
+            val (main, deep) = when (p.type) {
+                PowerType.MAGNET -> Color(0xFFFF5252) to Color(0xFF8E0000)
+                PowerType.FREEZE -> Color(0xFF80D8FF) to Color(0xFF01579B)
+                PowerType.DOUBLE -> Color(0xFFFFD740) to Color(0xFFB26A00)
+                PowerType.SHRINK -> Color(0xFFB2FF59) to Color(0xFF33691E)
+            }
+            val blink = if (p.life < 3f) (0.5f + 0.5f * sin(p.phase * 18f)) else 1f
+            softOval(Offset(c.x + SHADOW_DX, c.y + SHADOW_DY + 10f), 20f, 9f, 0.45f)
+            glow(c, 44f + sin(p.phase * 4f) * 4f, main.copy(alpha = 0.45f * blink))
+            drawCircle(deep, radius = 20f, center = c)
+            drawCircle(Brush.radialGradient(listOf(main.lighten(0.5f), main, deep), center = c + Offset(-6f, -7f), radius = 26f), radius = 18.5f, center = c)
+            drawCircle(Color.White.copy(alpha = 0.9f), radius = 19f, center = c, style = Stroke(2f))
+            // countdown ring
+            val frac = (p.life / 11f).coerceIn(0f, 1f)
+            drawArc(Color.White.copy(alpha = 0.85f), -90f, 360f * frac, false, topLeft = c - Offset(25f, 25f), size = Size(50f, 50f), style = Stroke(2.5f, cap = StrokeCap.Round))
+            // icon
+            when (p.type) {
+                PowerType.MAGNET -> {
+                    drawArc(Color.White, 180f, -180f, false, topLeft = c - Offset(9f, 9f), size = Size(18f, 18f), style = Stroke(5f))
+                    drawLine(Color.White, c + Offset(-9f, 0f), c + Offset(-9f, -8f), strokeWidth = 5f)
+                    drawLine(Color.White, c + Offset(9f, 0f), c + Offset(9f, -8f), strokeWidth = 5f)
+                    drawLine(deep, c + Offset(-9f, -8f), c + Offset(-9f, -11f), strokeWidth = 5f)
+                    drawLine(deep, c + Offset(9f, -8f), c + Offset(9f, -11f), strokeWidth = 5f)
+                }
+                PowerType.FREEZE -> {
+                    for (k in 0 until 3) {
+                        rotate(k * 60f, pivot = c) {
+                            drawLine(Color.White, c - Offset(0f, 11f), c + Offset(0f, 11f), strokeWidth = 2.6f, cap = StrokeCap.Round)
+                            drawLine(Color.White, c - Offset(0f, 7f), c + Offset(-4f, -10f), strokeWidth = 1.8f, cap = StrokeCap.Round)
+                            drawLine(Color.White, c - Offset(0f, 7f), c + Offset(4f, -10f), strokeWidth = 1.8f, cap = StrokeCap.Round)
+                        }
+                    }
+                }
+                PowerType.DOUBLE -> {
+                    drawIntoCanvas { canvas ->
+                        popPaint.textSize = 19f
+                        popPaint.style = android.graphics.Paint.Style.FILL
+                        popPaint.color = android.graphics.Color.WHITE
+                        canvas.nativeCanvas.drawText("x2", c.x, c.y + 7f, popPaint)
+                    }
+                }
+                PowerType.SHRINK -> {
+                    drawLine(Color.White, c + Offset(-8f, -8f), c + Offset(8f, 8f), strokeWidth = 3f, cap = StrokeCap.Round)
+                    drawLine(Color.White, c + Offset(8f, -8f), c + Offset(-8f, 8f), strokeWidth = 3f, cap = StrokeCap.Round)
+                    drawCircle(Color.White, radius = 4f, center = c + Offset(-9f, 9f), style = Stroke(2f))
+                    drawCircle(Color.White, radius = 4f, center = c + Offset(9f, 9f), style = Stroke(2f))
+                }
+            }
+        }
+    }
+
+    /** Rotating field lines around an armadillo while MAGNET is active. */
+    fun drawMagnetAura(scope: DrawScope, a: ArmadilloState, boardCenter: Offset) = with(scope) {
+        if (a.isEaten) return@with
+        val c = Offset(boardCenter.x + a.pos.x, boardCenter.y + a.pos.y)
+        val t = nowSeconds()
+        for (k in 0 until 3) {
+            val r = 60f + ((t * 70f + k * 40f) % 120f)
+            val alpha = 1f - (r - 60f) / 120f
+            drawCircle(Color(0xFFFF5252).copy(alpha = 0.35f * alpha), radius = r, center = c, style = Stroke(2f, pathEffect = PathEffect.dashPathEffect(floatArrayOf(10f, 10f), t * 30f)))
         }
     }
 

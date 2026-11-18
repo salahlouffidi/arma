@@ -17,6 +17,8 @@ import com.example.game.FruitType
 import com.example.game.Obstacle
 import com.example.game.ObstacleType
 import com.example.game.Particle
+import com.example.game.PowerType
+import com.example.game.PowerUpItem
 import com.example.game.SnakeState
 import com.example.game.SoundManager
 import com.example.game.StageProgressManager
@@ -75,6 +77,11 @@ class VisualGalleryScreenshotTest {
     @Test fun board_ice() = capture("board_6_ice") { Board(StageTheme.ICE) }
     @Test fun board_temple() = capture("board_7_temple") { Board(StageTheme.DARK_TEMPLE) }
     @Test fun board_final() = capture("board_8_final") { Board(StageTheme.FINAL_ARENA, dual = true) }
+
+    @Test fun board_neon() = capture("board_17_neon") { Board(StageTheme.NEON) }
+    @Test fun board_ocean() = capture("board_18_ocean") { Board(StageTheme.OCEAN) }
+    @Test fun board_candy() = capture("board_19_candy") { Board(StageTheme.CANDY, dual = true) }
+    @Test fun board_cosmos() = capture("board_20_cosmos") { Board(StageTheme.COSMOS, dual = true) }
 
     @Config(qualifiers = TABLET_LAND)
     @Test fun board_tablet() = capture("board_9_tablet_jungle") { Board(StageTheme.JUNGLE, dual = true) }
@@ -170,7 +177,21 @@ class VisualGalleryScreenshotTest {
                         AppleItem(1, Vector2(-halfW * 0.15f, -halfH * 0.55f), bobPhase = 0.5f),
                         AppleItem(2, Vector2(halfW * 0.25f, -halfH * 0.62f), fruitType = FruitType.ESCAPE_GOLDEN, sparkleTimer = 0.3f),
                         AppleItem(3, Vector2(-halfW * 0.6f, halfH * 0.1f), fruitType = FruitType.ESCAPE_STAR_POWER, sparkleTimer = 0.2f),
-                        AppleItem(4, Vector2(halfW * 0.1f, halfH * 0.65f), dropHeight = 40f)
+                        AppleItem(4, Vector2(halfW * 0.1f, halfH * 0.65f), dropHeight = 40f),
+                        AppleItem(5, Vector2(-halfW * 0.75f, -halfH * 0.7f), kind = 1),
+                        AppleItem(6, Vector2(-halfW * 0.62f, -halfH * 0.7f), kind = 2),
+                        AppleItem(7, Vector2(-halfW * 0.49f, -halfH * 0.7f), kind = 3),
+                        AppleItem(8, Vector2(-halfW * 0.36f, -halfH * 0.7f), kind = 4)
+                    ),
+                    c
+                )
+                TableRenderer.drawPowerUps(
+                    this,
+                    listOf(
+                        PowerUpItem(1, Vector2(halfW * 0.55f, -halfH * 0.7f), PowerType.MAGNET, life = 9f, phase = 0.3f),
+                        PowerUpItem(2, Vector2(halfW * 0.7f, -halfH * 0.7f), PowerType.FREEZE, life = 6f),
+                        PowerUpItem(3, Vector2(halfW * 0.55f, -halfH * 0.42f), PowerType.DOUBLE, life = 10f),
+                        PowerUpItem(4, Vector2(halfW * 0.7f, -halfH * 0.42f), PowerType.SHRINK, life = 2f)
                     ),
                     c
                 )

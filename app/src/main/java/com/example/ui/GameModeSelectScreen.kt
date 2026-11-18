@@ -168,8 +168,9 @@ fun GameModeSelectScreen(
                         ) {
                             FeatureBullet(icon = "01", text = "ROUNDS 01–08: Solo Golden Armadillo")
                             FeatureBullet(icon = "09", text = "ROUNDS 09–16: Dual Armadillo — one player")
+                            FeatureBullet(icon = "17", text = "NEW WORLD 3: Rounds 17–20 power-up arenas")
                             FeatureBullet(icon = "AI", text = "AI-controlled predator snakes")
-                            FeatureBullet(icon = "OD", text = "OVERDRIVE ability and virtual joystick controls")
+                            FeatureBullet(icon = "PU", text = "Power-ups, combos and growing snakes")
                             Spacer(modifier = Modifier.height(6.dp))
                             ProButton(
                                 text = "START SOLO",

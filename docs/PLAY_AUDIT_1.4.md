@@ -77,3 +77,19 @@ Test UMP en zone EEE sur appareil réel : copier l'ID haché affiché dans Logca
 ## Actions restantes
 **AdMob** : Confidentialité et messages → vérifier qu'un message RGPD (EEE/RU/Suisse) est **publié** pour l'app ARMASNAKE (et un message « États américains » si vous servez les US) ; vérifier `app-ads.txt` sur le site développeur ; ne pas recréer l'app ni les blocs.
 **Play Console** : téléverser l'AAB signé (versionCode 5) en test interne. Vérifier ensuite dans *Explorateur d'App Bundle* / *Vitals* que l'obfuscation, l'avertissement Fragment et la mémoire sont recalculés. Mettre à jour *Sécurité des données* si nécessaire.
+
+---
+
+# Version 2.0 (versionCode 6)
+
+## Publicités — diagnostic AdMob (consulté le 18/11/2026)
+- App ARMASNAKE : **Prête**, diffusion activée, blocs `/6699816813` (interstitiel) et `/5578306837` (récompensé) corrects, aucun problème dans le Centre des règles, message RGPD actif.
+- 7 derniers jours : **4 demandes, taux de correspondance 100 %, 0 impression**. Les annonces se chargeaient, mais n'étaient presque jamais affichées.
+- Causes dans le code : un seul préchargement au démarrage, sans nouvelle tentative ni rafraîchissement ; bouton vidéo et Retry qui échouaient tout de suite si l'annonce n'était pas encore prête ; une seule pause naturelle utilisée.
+- Corrections : attente du chargement (jusqu'à 6 s pour la vidéo, 2,5 s pour l'interstitiel) avec « Loading your video… » ; nouvelles tentatives (15 s → 2 min) ; annonce expirée rechargée après 55 min ; préchargement à chaque round, game over, round gagné et retour dans l'app ; interstitiels aussi après un round gagné et en quittant après une défaite, avec un écart d'au moins 30 s ; journaux `ArmaAds` dans Logcat ; Ad Inspector en build debug (appui long sur « LOUFFI EDITION »).
+
+## Gameplay 2.0
+- Power-ups : MAGNET (8 s), FREEZE (6 s), x2 POINTS (10 s), SNAKE SHRINK.
+- Combos (fenêtre de 2,4 s, jusqu'à x6) et fruits de valeurs différentes : pomme et orange 1, raisin et cerises 2, pastèque 3.
+- Comme dans snake.io : les serpents grandissent tous les 6 fruits, jusqu'à 30 segments ; SHRINK les raccourcit.
+- Monde 3 : rounds 17 Neon City, 18 Deep Ocean, 19 Candy Land (duo), 20 Cosmos (duo, 3 serpents). Progression et sauvegardes conservées (mêmes clés).

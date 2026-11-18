@@ -1,3 +1,4 @@
+@file:OptIn(androidx.compose.foundation.ExperimentalFoundationApi::class)
 package com.example.ui
 
 import androidx.compose.animation.core.LinearEasing
@@ -51,6 +52,7 @@ import androidx.compose.ui.window.Dialog
 import com.example.game.SoundManager
 import com.example.game.StageConfig
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.safeDrawingPadding
@@ -64,7 +66,8 @@ fun MainMenuScreen(
     onOpenStageSelect: () -> Unit,
     onOpenAudioSettings: () -> Unit,
     onOpenGameModeSelect: () -> Unit = onOpenStageSelect,
-    onOpenPrivacyOptions: (() -> Unit)? = null
+    onOpenPrivacyOptions: (() -> Unit)? = null,
+    onDebugAdInspector: (() -> Unit)? = null
 ) {
     var showHowToPlay by remember { mutableStateOf(false) }
 
@@ -107,6 +110,7 @@ fun MainMenuScreen(
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         ProDivider(Modifier.width(48.dp))
                         Text(
+                            modifier = if (onDebugAdInspector != null) Modifier.combinedClickable(onClick = {}, onLongClick = onDebugAdInspector) else Modifier,
                             text = "  LOUFFI EDITION  ",
                             color = Color(0xFFFFB547),
                             fontSize = 13.sp,
@@ -117,9 +121,9 @@ fun MainMenuScreen(
                     }
                     Spacer(Modifier.height(14.dp))
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        ProChip("16 ROUNDS", color = ArmaColors.Gold, filled = true)
+                        ProChip("${StageConfig.MAX_ROUND} ROUNDS", color = ArmaColors.Gold, filled = true)
                         ProChip("SOLO & DUAL", color = ArmaColors.Blue)
-                        ProChip("OVERDRIVE SHIELD", color = ArmaColors.Green)
+                        ProChip("NEW: POWER-UPS & COMBOS", color = ArmaColors.Green)
                     }
                 }
             }
@@ -286,8 +290,8 @@ private fun HowToPlayDialog(onDismiss: () -> Unit) {
                     )
                     RuleRow(
                         icon = "👑",
-                        title = "All 16 Rounds Available",
-                        desc = "Round 01 through Round 16 are completely unlocked from the start. Jump to any environment immediately!"
+                        title = "Power-ups, Combos & World 3",
+                        desc = "Grab MAGNET, FREEZE, x2 POINTS and SNAKE SHRINK orbs, chain fruit for combo points, and beat Rounds 17–20: Neon City, Deep Ocean, Candy Land and Cosmos. Watch out: snakes grow as you feed!"
                     )
                 }
 

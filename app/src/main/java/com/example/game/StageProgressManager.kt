@@ -8,7 +8,7 @@ class StageProgressManager(context: Context) {
         context.getSharedPreferences("armadillo_escape_progress_v2", Context.MODE_PRIVATE)
 
     fun getHighestUnlockedStage(): Int {
-        return prefs.getInt(KEY_HIGHEST_UNLOCKED, 1).coerceIn(1, 16)
+        return prefs.getInt(KEY_HIGHEST_UNLOCKED, 1).coerceIn(1, StageConfig.MAX_ROUND)
     }
 
     fun isStageUnlocked(stageId: Int): Boolean {
@@ -18,7 +18,7 @@ class StageProgressManager(context: Context) {
     fun unlockStage(stageId: Int) {
         val current = getHighestUnlockedStage()
         if (stageId > current) {
-            prefs.edit().putInt(KEY_HIGHEST_UNLOCKED, stageId.coerceIn(1, 16)).apply()
+            prefs.edit().putInt(KEY_HIGHEST_UNLOCKED, stageId.coerceIn(1, StageConfig.MAX_ROUND)).apply()
         }
     }
 
@@ -32,7 +32,7 @@ class StageProgressManager(context: Context) {
 
     fun markStageCompleted(stageId: Int) {
         prefs.edit().putBoolean(KEY_STAGE_COMPLETED_PREFIX + stageId, true).apply()
-        if (stageId < 16) {
+        if (stageId < StageConfig.MAX_ROUND) {
             unlockStage(stageId + 1)
         }
     }
