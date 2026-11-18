@@ -1,0 +1,243 @@
+11-18 16:19:24.149  1047  1047 W Telephony: registerMmTelCapabilityCallback: registration failed, no ImsService available. Exception: code: 1
+11-18 16:19:24.723   521  1496 I ActivityTaskManager: START u0 {flg=0x10000000 cmp=com.aistudio.armadilloescape.xwqrpz/com.example.MainActivity} with LAUNCH_MULTIPLE from uid 2000 (BAL_ALLOW_PERMISSION) result code=0
+11-18 16:19:24.861   521   551 I ActivityManager: Start proc 2500:com.aistudio.armadilloescape.xwqrpz/u0a192 for next-top-activity {com.aistudio.armadilloescape.xwqrpz/com.example.MainActivity}
+11-18 16:19:25.240   521  1996 D CoreBackPreview: Window{eeb6711 u0 Splash Screen com.aistudio.armadilloescape.xwqrpz}: Setting back callback OnBackInvokedCallbackInfo{mCallback=android.window.IOnBackInvokedCallback$Stub$Proxy@9da6f3, mPriority=0, mIsAnimationCallback=false}
+11-18 16:19:25.370   521   803 I SdkSandboxManager: No SDKs used. Skipping SDK data reconcilation for CallingInfo{mUid=10192, mPackageName='com.aistudio.armadilloescape.xwqrpz, mAppProcessToken='null'}
+11-18 16:19:25.554   521   543 I BLASTSyncEngine: Unfinished container: Task{1e0ebc9 #8 type=standard A=10192:com.aistudio.armadilloescape.xwqrpz}
+11-18 16:19:25.554   521   543 I BLASTSyncEngine: Unfinished container: ActivityRecord{c59c1b u0 com.aistudio.armadilloescape.xwqrpz/com.example.MainActivity t8}
+11-18 16:19:25.557   521   540 V WindowManager:     info={id=6 t=CLOSE f=0x0 trk=0 r=[0@Point(0, 0)] c=[{WCT{RemoteToken{1c41978 Task{1e0ebc9 #8 type=standard A=10192:com.aistudio.armadilloescape.xwqrpz}}} m=OPEN f=MOVE_TO_TOP leash=Surface(name=Task=8)/@0xc2ff892 sb=Rect(0, 0 - 1080, 2400) eb=Rect(0, 0 - 1080, 2400) d=0}]}
+11-18 16:19:25.689  1754  2432 D StrictMode: 	at android.os.Parcel.readExceptionCode(Parcel.java:3002)
+11-18 16:19:25.689  1754  2432 D StrictMode: 	at android.database.DatabaseUtils.readExceptionFromParcel(DatabaseUtils.java:139)
+11-18 16:19:25.809  2500  2500 W ziparchive: Unable to open '/data/app/~~OooFbwM_g1GO7mGOIogl3Q==/com.aistudio.armadilloescape.xwqrpz-eOBDhb-fRURRTxOPx--0Xg==/base.dm': No such file or directory
+11-18 16:19:25.809  2500  2500 W ziparchive: Unable to open '/data/app/~~OooFbwM_g1GO7mGOIogl3Q==/com.aistudio.armadilloescape.xwqrpz-eOBDhb-fRURRTxOPx--0Xg==/base.dm': No such file or directory
+11-18 16:19:25.868  2391  2579 E DialerDialerBaseApplication: Caused by: java.lang.IllegalStateException: Resources are not initialized yet. Do not call getResource() in constructors of injected classes
+11-18 16:19:26.041  2500  2500 D nativeloader: Configuring clns-6 for other apk /data/app/~~OooFbwM_g1GO7mGOIogl3Q==/com.aistudio.armadilloescape.xwqrpz-eOBDhb-fRURRTxOPx--0Xg==/base.apk. target_sdk_version=36, uses_libraries=, library_path=/data/app/~~OooFbwM_g1GO7mGOIogl3Q==/com.aistudio.armadilloescape.xwqrpz-eOBDhb-fRURRTxOPx--0Xg==/lib/x86_64:/data/app/~~OooFbwM_g1GO7mGOIogl3Q==/com.aistudio.armadilloescape.xwqrpz-eOBDhb-fRURRTxOPx--0Xg==/base.apk!/lib/x86_64, permitted_path=/data:/mnt/expand:/data/user/0/com.aistudio.armadilloescape.xwqrpz
+11-18 16:19:26.047  2500  2500 V GraphicsEnvironment: ANGLE GameManagerService for com.aistudio.armadilloescape.xwqrpz: false
+11-18 16:19:26.047  2500  2500 V GraphicsEnvironment: com.aistudio.armadilloescape.xwqrpz is not listed in per-application setting
+11-18 16:19:26.091  2500  2500 D AndroidRuntime: Shutting down VM
+11-18 16:19:26.091  2500  2500 E AndroidRuntime: FATAL EXCEPTION: main
+11-18 16:19:26.091  2500  2500 E AndroidRuntime: Process: com.aistudio.armadilloescape.xwqrpz, PID: 2500
+11-18 16:19:26.091  2500  2500 E AndroidRuntime: java.lang.RuntimeException: Unable to get provider androidx.startup.InitializationProvider: yj: java.lang.RuntimeException: Failed to create an instance of androidx.work.impl.WorkDatabase
+11-18 16:19:26.091  2500  2500 E AndroidRuntime: 	at android.app.ActivityThread.installProvider(ActivityThread.java:7770)
+11-18 16:19:26.091  2500  2500 E AndroidRuntime: 	at android.app.ActivityThread.installContentProviders(ActivityThread.java:7276)
+11-18 16:19:26.091  2500  2500 E AndroidRuntime: 	at android.app.ActivityThread.handleBindApplication(ActivityThread.java:6983)
+11-18 16:19:26.091  2500  2500 E AndroidRuntime: 	at android.app.ActivityThread.-$$Nest$mhandleBindApplication(Unknown Source:0)
+11-18 16:19:26.091  2500  2500 E AndroidRuntime: 	at android.app.ActivityThread$H.handleMessage(ActivityThread.java:2236)
+11-18 16:19:26.091  2500  2500 E AndroidRuntime: 	at android.os.Handler.dispatchMessage(Handler.java:106)
+11-18 16:19:26.091  2500  2500 E AndroidRuntime: 	at android.os.Looper.loopOnce(Looper.java:205)
+11-18 16:19:26.091  2500  2500 E AndroidRuntime: 	at android.os.Looper.loop(Looper.java:294)
+11-18 16:19:26.091  2500  2500 E AndroidRuntime: 	at android.app.ActivityThread.main(ActivityThread.java:8177)
+11-18 16:19:26.091  2500  2500 E AndroidRuntime: 	at java.lang.reflect.Method.invoke(Native Method)
+11-18 16:19:26.091  2500  2500 E AndroidRuntime: 	at com.android.internal.os.RuntimeInit$MethodAndArgsCaller.run(RuntimeInit.java:552)
+11-18 16:19:26.091  2500  2500 E AndroidRuntime: 	at com.android.internal.os.ZygoteInit.main(ZygoteInit.java:971)
+11-18 16:19:26.091  2500  2500 E AndroidRuntime: Caused by: yj: java.lang.RuntimeException: Failed to create an instance of androidx.work.impl.WorkDatabase
+11-18 16:19:26.091  2500  2500 E AndroidRuntime: 	at lm3.k(SourceFile:100)
+11-18 16:19:26.091  2500  2500 E AndroidRuntime: 	at lm3.i(SourceFile:85)
+11-18 16:19:26.091  2500  2500 E AndroidRuntime: 	at androidx.startup.InitializationProvider.onCreate(SourceFile:53)
+11-18 16:19:26.091  2500  2500 E AndroidRuntime: 	at android.content.ContentProvider.attachInfo(ContentProvider.java:2619)
+11-18 16:19:26.091  2500  2500 E AndroidRuntime: 	at android.content.ContentProvider.attachInfo(ContentProvider.java:2589)
+11-18 16:19:26.091  2500  2500 E AndroidRuntime: 	at android.app.ActivityThread.installProvider(ActivityThread.java:7765)
+11-18 16:19:26.091  2500  2500 E AndroidRuntime: 	... 11 more
+11-18 16:19:26.091  2500  2500 E AndroidRuntime: Caused by: java.lang.RuntimeException: Failed to create an instance of androidx.work.impl.WorkDatabase
+11-18 16:19:26.091  2500  2500 E AndroidRuntime: 	at pj1.<init>(SourceFile:593)
+11-18 16:19:26.091  2500  2500 E AndroidRuntime: 	at pj1.c(SourceFile:44)
+11-18 16:19:26.091  2500  2500 E AndroidRuntime: 	at androidx.work.WorkManagerInitializer.b(SourceFile:27)
+11-18 16:19:26.091  2500  2500 E AndroidRuntime: 	at lm3.k(SourceFile:86)
+11-18 16:19:26.091  2500  2500 E AndroidRuntime: 	... 16 more
+11-18 16:19:26.319   521  1769 E ActivityManager: App crashed on incremental package com.aistudio.armadilloescape.xwqrpz which is 100% loaded.
+11-18 16:19:26.510  1047  1047 D CarrierSvcBindHelper: onPackageAdded: com.aistudio.armadilloescape.xwqrpz
+11-18 16:19:26.521   521  1769 W ActivityTaskManager:   Force finishing activity com.aistudio.armadilloescape.xwqrpz/com.example.MainActivity
+11-18 16:19:26.533   521  2000 I ActivityManager: Process com.aistudio.armadilloescape.xwqrpz (pid 2500) has died: fg  TOP 
+11-18 16:19:26.597   521   758 E WifiStaIfaceAidlImpl: installApfPacketFilter failed with service-specific exception: android.os.ServiceSpecificException:  (code 4)
+11-18 16:19:26.597   521   758 E WifiStaIfaceAidlImpl: installApfPacketFilter failed with service-specific exception: android.os.ServiceSpecificException:  (code 4)
+11-18 16:19:26.747  1001  1021 E SystemServiceRegistry: android.os.ServiceManager$ServiceNotFoundException: No service published for: ethernet
+11-18 16:19:26.965   335   369 I netd    : networkAddInterface(100, wlan0) -> ServiceSpecificException(64, "Machine is not on the network") <0.02ms>
+11-18 16:19:26.965   521   765 W ConnectivityService: Exception adding interface: android.os.ServiceSpecificException: Machine is not on the network (code 64)
+11-18 16:19:26.966   335   369 I netd    : networkAddRouteParcel(100, RouteInfoParcel{destination: fe80::/64, ifName: wlan0, nextHop: , mtu: 0}) -> ServiceSpecificException(64, "Machine is not on the network") <0.02ms>
+11-18 16:19:26.985   521   758 E WifiStaIfaceAidlImpl: setDtimMultiplier failed with service-specific exception: android.os.ServiceSpecificException:  (code 4)
+11-18 16:19:27.027   521   543 W ActivityTaskManager: Activity top resumed state loss timeout for ActivityRecord{c59c1b u0 com.aistudio.armadilloescape.xwqrpz/com.example.MainActivity t8 f} isExiting}
+11-18 16:19:27.067   521   765 W BestClock: java.time.DateTimeException: Missing network time fix
+11-18 16:19:27.412   521   765 W BestClock: java.time.DateTimeException: Missing network time fix
+11-18 16:19:27.456  1047  1361 D ImsResolver: maybeAddedImsService, packageName: com.aistudio.armadilloescape.xwqrpz
+11-18 16:19:27.623   521   756 W BestClock: java.time.DateTimeException: Missing network time fix
+11-18 16:19:27.673   521   756 W BestClock: java.time.DateTimeException: Missing network time fix
+11-18 16:19:27.680   521   756 W BestClock: java.time.DateTimeException: Missing network time fix
+11-18 16:19:27.689  1630  2144 W SnapshotHandler: java.io.FileNotFoundException: /data/user_de/0/com.google.android.googlequicksearchbox/files/phenotype/shared/com.google.android.libraries.performance.primes#com.google.android.googlequicksearchbox.pb: open failed: ENOENT (No such file or directory)
+11-18 16:19:27.689  1630  2144 W SnapshotHandler: Caused by: android.system.ErrnoException: open failed: ENOENT (No such file or directory)
+11-18 16:19:27.690   521   756 W BestClock: java.time.DateTimeException: Missing network time fix
+11-18 16:19:27.724   335   367 I netd    : networkAddRouteParcel(100, RouteInfoParcel{destination: 10.0.2.0/24, ifName: wlan0, nextHop: , mtu: 0}) -> ServiceSpecificException(64, "Machine is not on the network") <0.01ms>
+11-18 16:19:27.725   521   765 E ConnectivityService: Exception in networkAddRouteParcel for non-gateway: android.os.ServiceSpecificException: Machine is not on the network (code 64)
+11-18 16:19:27.725   335   367 I netd    : networkAddRouteParcel(100, RouteInfoParcel{destination: 0.0.0.0/0, ifName: wlan0, nextHop: 10.0.2.2, mtu: 0}) -> ServiceSpecificException(64, "Machine is not on the network") <0.02ms>
+11-18 16:19:27.726   521   765 E ConnectivityService: Exception in networkAddRouteParcel for gateway: android.os.ServiceSpecificException: Machine is not on the network (code 64)
+11-18 16:19:27.727   521   758 E WifiStaIfaceAidlImpl: installApfPacketFilter failed with service-specific exception: android.os.ServiceSpecificException:  (code 4)
+11-18 16:19:27.878   521   758 E WifiStaIfaceAidlImpl: installApfPacketFilter failed with service-specific exception: android.os.ServiceSpecificException:  (code 4)
+11-18 16:19:27.920  1047  1047 W Telephony: registerMmTelCapabilityCallback: registration failed, no ImsService available. Exception: code: 1
+11-18 16:19:27.920  1047  1047 W Telephony: registerImsRegistrationCallback: registration failed, no ImsService available. Exception: code: 1
+11-18 16:19:27.959   521   765 W BestClock: java.time.DateTimeException: Missing network time fix
+11-18 16:19:28.001   521   765 W BestClock: java.time.DateTimeException: Missing network time fix
+11-18 16:19:28.021   521   765 W BestClock: java.time.DateTimeException: Missing network time fix
+11-18 16:19:28.025   521   758 E WifiStaIfaceAidlImpl: setDtimMultiplier failed with service-specific exception: android.os.ServiceSpecificException:  (code 4)
+11-18 16:19:28.026   521   758 E WifiStaIfaceAidlImpl: stopRssiMonitoring failed with service-specific exception: android.os.ServiceSpecificException:  (code 5)
+11-18 16:19:28.104  1047  1047 W Telephony: registerMmTelCapabilityCallback: registration failed, no ImsService available. Exception: code: 1
+11-18 16:19:28.106  1047  1047 W Telephony: registerImsRegistrationCallback: registration failed, no ImsService available. Exception: code: 1
+11-18 16:19:28.107  1452  1494 W ConfigFileUtils: Failed to read asset ChimeraModuleSetList.pb: java.io.FileNotFoundException: ChimeraModuleSetList.pb
+11-18 16:19:28.137  1397  1485 W AsyncOperation: OperationException[Status{statusCode=unknown status code: 29503, resolution=null}]
+11-18 16:19:28.140  1397  1485 W AsyncOperation: OperationException[Status{statusCode=unknown status code: 29503, resolution=null}]
+11-18 16:19:28.144   521   765 W BestClock: java.time.DateTimeException: Missing network time fix
+11-18 16:19:28.144  1630  1863 W SnapshotHandler: java.io.FileNotFoundException: /data/user/0/com.google.android.googlequicksearchbox/files/phenotype/shared/com.google.android.libraries.consentverifier#com.google.android.googlequicksearchbox.pb: open failed: ENOENT (No such file or directory)
+11-18 16:19:28.144  1630  1863 W SnapshotHandler: Caused by: android.system.ErrnoException: open failed: ENOENT (No such file or directory)
+11-18 16:19:28.295   521   540 V WindowManager:     info={id=7 t=CHANGE f=0x0 trk=0 r=[0@Point(0, 0)] c=[{WCT{RemoteToken{81a38b3 Task{9a2a2ab #1 type=home}}} m=TO_FRONT f=SHOW_WALLPAPER|MOVE_TO_TOP leash=Surface(name=Task=1)/@0xc3273ef sb=Rect(0, 0 - 1080, 2400) eb=Rect(0, 0 - 1080, 2400) d=0},{WCT{RemoteToken{1c41978 Task{1e0ebc9 #8 type=standard A=10192:com.aistudio.armadilloescape.xwqrpz}}} m=CLOSE f=NONE leash=Surface(name=Task=8)/@0xc2ff892 sb=Rect(0, 0 - 1080, 2400) eb=Rect(0, 0 - 1080, 2400) d=0},{null m=TO_FRONT f=IS_WALLPAPER p=WCT{RemoteToken{de2de70 Display{#0 state=ON size=1080x2400 ROTATION_0}}} leash=Surface(name=WallpaperWindowToken{dc55a9f token=android.os.Binder@54d43a8})/@0xcefd7ed sb=Rect(0, 0 - 1080, 2400) eb=Rect(0, 0 - 1080, 2400) d=0},{WCT{RemoteToken{de2de70 Display{#0 state=ON size=1080x2400 ROTATION_0}}} m=CHANGE f=SHOW_WALLPAPER|IS_DISPLAY leash=Surface(name=WindowedMagnification:0:31)/@0x7829bb7 sb=Rect(0, 0 - 1080, 2400) eb=Rect(0, 0 - 1080, 2400) d=0}]}
+11-18 16:19:28.369   521   756 W BestClock: java.time.DateTimeException: Missing network time fix
+11-18 16:19:28.369   521   756 W BestClock: java.time.DateTimeException: Missing network time fix
+11-18 16:19:28.439  1397  1410 W ChimeraSrvcProxy: Failed to read the buffer size file. Using default NullBinder reply size. java.io.FileNotFoundException: /data/user_de/0/com.google.android.gms/files/binder_buffer_size.txt: open failed: ENOENT (No such file or directory)
+11-18 16:19:28.445  1397  1410 I ChimeraSrvcProxy: NullBinder for android.net.action.RECOMMEND_NETWORKS triggering remote TransactionTooLargeException due to Service without Chimera impl
+11-18 16:19:28.601   521   595 W InputManager-JNI: Input channel object 'eeb6711 Splash Screen com.aistudio.armadilloescape.xwqrpz (client)' was disposed without first being removed with the input manager!
+11-18 16:19:28.674  2391  2589 E PhenotypeFlagCommitter: java.util.concurrent.TimeoutException: Timed out waiting for Task
+11-18 16:19:28.908   834   920 E KeyguardUpdateMonitorLog: java.lang.Exception: Called by
+11-18 16:19:28.908   834   920 E KeyguardUpdateMonitorLog: java.lang.Exception: Called by
+11-18 16:19:29.118  2568  2776 I VoiceDataManager: Caused by: java.util.concurrent.CancellationException: Task was cancelled.
+11-18 16:19:29.147  1397  1485 W AsyncOperation: OperationException[Status{statusCode=unknown status code: 29503, resolution=null}]
+11-18 16:19:29.222  1001  1021 E SystemServiceRegistry: android.os.ServiceManager$ServiceNotFoundException: No service published for: ethernet
+11-18 16:19:29.305  1047  1047 W Telephony: registerMmTelCapabilityCallback: registration failed, no ImsService available. Exception: code: 1
+11-18 16:19:29.392  1644  2430 W ModernMediaScanner: Failed to visit /system/media: java.nio.file.NoSuchFileException: /system/media
+11-18 16:19:29.565  1644  2430 W ModernMediaScanner: Failed to visit /oem/media: java.nio.file.NoSuchFileException: /oem/media
+11-18 16:19:29.570  1047  1047 W Telephony: registerMmTelCapabilityCallback: registration failed, no ImsService available. Exception: code: 1
+11-18 16:19:29.638  1082  2501 E OneSearchSuggestProvider: io.grpc.StatusRuntimeException: UNKNOWN
+11-18 16:19:29.883  2718  3014 W WPCategoryProvider: android.content.pm.PackageManager$NameNotFoundException: com.google.pixel.livewallpaper
+11-18 16:19:30.022  1750  2660 E AwarenessRouterSyncMgr: Exception while syncing fences
+11-18 16:19:30.022  1750  2660 E AwarenessRouterSyncMgr: java.util.concurrent.ExecutionException: java.lang.IllegalStateException: Account associated with identity was null
+11-18 16:19:30.022  1750  2660 E AwarenessRouterSyncMgr: Caused by: java.lang.IllegalStateException: Account associated with identity was null
+11-18 16:19:30.069  1397  2085 I ChimeraSrvcProxy: NullBinder for android.net.action.RECOMMEND_NETWORKS triggering remote TransactionTooLargeException due to Service without Chimera impl
+11-18 16:19:30.317  1397  1412 I ChimeraSrvcProxy: NullBinder for android.net.action.RECOMMEND_NETWORKS triggering remote TransactionTooLargeException due to Service without Chimera impl
+11-18 16:19:30.565  1452  2754 E PhenotypeFlagCommitter: java.util.concurrent.TimeoutException: Timed out waiting for Task
+11-18 16:19:31.713   835   835 I SafetyLabelChangedBroadcastReceiver: received broadcast packageName: com.aistudio.armadilloescape.xwqrpz, current user: UserHandle{0}, packageChangeEvent: NEW_INSTALL, intent user: UserHandle{0}
+11-18 16:19:32.129  1047  1047 W Telephony: registerMmTelCapabilityCallback: registration failed, no ImsService available. Exception: code: 1
+11-18 16:19:32.134  1047  1047 W Telephony: registerImsRegistrationCallback: registration failed, no ImsService available. Exception: code: 1
+11-18 16:19:32.229  2199  3055 E PhenotypeFlagCommitter: java.util.concurrent.TimeoutException: Timed out waiting for Task
+11-18 16:19:32.327  1047  1047 W Telephony: registerMmTelCapabilityCallback: registration failed, no ImsService available. Exception: code: 1
+11-18 16:19:32.328  1047  1047 W Telephony: registerImsRegistrationCallback: registration failed, no ImsService available. Exception: code: 1
+11-18 16:19:32.337   335   367 I netd    : networkAddInterface(101, eth0) -> ServiceSpecificException(64, "Machine is not on the network") <0.02ms>
+11-18 16:19:32.339   521   765 W ConnectivityService: Exception adding interface: android.os.ServiceSpecificException: Machine is not on the network (code 64)
+11-18 16:19:32.339   335   367 I netd    : networkAddRouteParcel(101, RouteInfoParcel{destination: 10.0.2.0/24, ifName: eth0, nextHop: , mtu: 0}) -> ServiceSpecificException(64, "Machine is not on the network") <0.01ms>
+11-18 16:19:32.339   521   765 E ConnectivityService: Exception in networkAddRouteParcel for non-gateway: android.os.ServiceSpecificException: Machine is not on the network (code 64)
+11-18 16:19:32.339   335   367 I netd    : networkAddRouteParcel(101, RouteInfoParcel{destination: 0.0.0.0/0, ifName: eth0, nextHop: 10.0.2.2, mtu: 1500}) -> ServiceSpecificException(64, "Machine is not on the network") <0.01ms>
+11-18 16:19:32.340   521   765 E ConnectivityService: Exception in networkAddRouteParcel for gateway: android.os.ServiceSpecificException: Machine is not on the network (code 64)
+11-18 16:19:32.379  1082  1133 I Launcher.IconCache: Database bulk icon loading failed, using fallback bulk icon loading for: ComponentInfo{com.aistudio.armadilloescape.xwqrpz/com.example.MainActivity}
+11-18 16:19:32.448  1397  1485 W AsyncOperation: OperationException[Status{statusCode=unknown status code: 29503, resolution=null}]
+11-18 16:19:32.456  1397  1485 W AsyncOperation: OperationException[Status{statusCode=unknown status code: 29503, resolution=null}]
+11-18 16:19:32.456  1397  1485 W AsyncOperation: OperationException[Status{statusCode=unknown status code: 29503, resolution=null}]
+11-18 16:19:33.328  1754  2386 W A       : Exception while fetching versionCode for package[com.google.android.apps.tv.dreamx].
+11-18 16:19:33.328  1754  2386 W A       : android.content.pm.PackageManager$NameNotFoundException: com.google.android.apps.tv.dreamx
+11-18 16:19:33.336  1754  2386 W A       : Exception while fetching versionCode for package[com.google.android.apps.tv.launcherx].
+11-18 16:19:33.336  1754  2386 W A       : android.content.pm.PackageManager$NameNotFoundException: com.google.android.apps.tv.launcherx
+11-18 16:19:33.913  1047  1047 W Telephony: registerMmTelCapabilityCallback: registration failed, no ImsService available. Exception: code: 1
+11-18 16:19:34.063  1755  3344 W ProviderInstaller: Failed to report request stats: java.lang.NoSuchMethodException: com.google.android.gms.common.security.ProviderInstallerImpl.reportRequestStats2 [class android.content.Context, long, long]
+11-18 16:19:34.133  1082  2501 E OneSearchSuggestProvider: io.grpc.StatusRuntimeException: UNKNOWN
+11-18 16:19:34.163  1082  2501 E OneSearchSuggestProvider: io.grpc.StatusRuntimeException: UNKNOWN
+11-18 16:19:34.562  1643  1643 I AiAiEcho: AppFetcherImplV2 updateApps package:[com.aistudio.armadilloescape.xwqrpz], userId:[0], reason:[package is added.].
+11-18 16:19:34.783  1397  1488 W Conscrypt: Could not set socket write timeout: java.net.SocketException: Socket closed
+11-18 16:19:35.056  1023  1023 E MediaControllerCompat: android.os.DeadObjectException
+11-18 16:19:35.066  1397  1488 W Conscrypt: Could not set socket write timeout: java.net.SocketException: Socket closed
+11-18 16:19:35.112  1047  1047 W Telephony: registerMmTelCapabilityCallback: registration failed, no ImsService available. Exception: code: 1
+11-18 16:19:35.112  1047  1047 W Telephony: registerImsRegistrationCallback: registration failed, no ImsService available. Exception: code: 1
+11-18 16:19:35.202  1452  3451 W ConfigFileUtils: Failed to read asset ChimeraModuleSetList.pb: java.io.FileNotFoundException: ChimeraModuleSetList.pb
+11-18 16:19:35.230  1047  1047 W Telephony: registerMmTelCapabilityCallback: registration failed, no ImsService available. Exception: code: 1
+11-18 16:19:35.674  1643  2920 W AiAiAutofill: java.lang.SecurityException: caller is not user's Augmented Autofill Service
+11-18 16:19:35.770  1001  1021 E SystemServiceRegistry: android.os.ServiceManager$ServiceNotFoundException: No service published for: ethernet
+11-18 16:19:35.984  1397  1397 E GmsCoreLogger: java.util.concurrent.ExecutionException: java.util.concurrent.TimeoutException
+11-18 16:19:35.984  1397  1397 E GmsCoreLogger: Caused by: java.util.concurrent.TimeoutException
+11-18 16:19:36.029  1047  1047 W Telephony: registerMmTelCapabilityCallback: registration failed, no ImsService available. Exception: code: 1
+11-18 16:19:36.029  1047  1047 W Telephony: registerImsRegistrationCallback: registration failed, no ImsService available. Exception: code: 1
+11-18 16:19:36.352  1452  1482 W Conscrypt: Could not set socket write timeout: java.net.SocketException: Socket closed
+11-18 16:19:36.472  1047  1047 W Telephony: registerMmTelCapabilityCallback: registration failed, no ImsService available. Exception: code: 1
+11-18 16:19:36.649  1397  2148 E CCTFlatFileLogStore: java.util.concurrent.TimeoutException: Timed out waiting for Task
+11-18 16:19:36.750  1452  1482 W Conscrypt: Could not set socket write timeout: java.net.SocketException: Socket closed
+11-18 16:19:36.819  1047  1047 W Telephony: registerMmTelCapabilityCallback: registration failed, no ImsService available. Exception: code: 1
+11-18 16:19:37.249  3517  3517 W SnapshotHandler: java.io.FileNotFoundException: /data/user/0/com.google.android.googlequicksearchbox/files/phenotype/shared/com.google.android.libraries.search.rendering.xuikit.device#com.google.android.googlequicksearchbox.pb: open failed: ENOENT (No such file or directory)
+11-18 16:19:37.254  3517  3517 W SnapshotHandler: Caused by: android.system.ErrnoException: open failed: ENOENT (No such file or directory)
+11-18 16:19:38.002  1452  3748 W Conscrypt: Could not set socket write timeout: java.net.SocketException: Socket closed
+11-18 16:19:38.079  1452  3748 W Conscrypt: Could not set socket write timeout: java.net.SocketException: Socket closed
+11-18 16:19:38.215  1643  2392 W AiAiFed : java.lang.IllegalArgumentException: Unsupported response code3
+11-18 16:19:38.483  1643  2374 W AiAiFed : java.lang.IllegalArgumentException: Unsupported response code3
+11-18 16:19:38.484  1643  2392 W AiAiFed : java.lang.IllegalArgumentException: Unsupported response code3
+11-18 16:19:38.754  1397  2825 W FontLog : java.lang.IllegalStateException: attempt to re-open an already-closed object: SQLiteDatabase: /data/user/0/com.google.android.gms/databases/metadata.db
+11-18 16:19:39.292  3517  3622 W A       : DiscoverPrecheckException(precheckFailureReason=com.google.android.apps.search.googleapp.discover.w.a.c@9ec0e2e)
+11-18 16:19:39.464  1001  1021 E SystemServiceRegistry: android.os.ServiceManager$ServiceNotFoundException: No service published for: ethernet
+11-18 16:19:39.478  3517  3615 W A       : DiscoverPrecheckException(precheckFailureReason=com.google.android.apps.search.googleapp.discover.w.a.c@9ec0e2e)
+11-18 16:19:39.492  3517  3517 W A       : com.google.android.apps.search.googleapp.discover.v.i: DiscoverPrecheckException(precheckFailureReason=com.google.android.apps.search.googleapp.discover.w.a.c@9ec0e2e)
+11-18 16:19:39.492  3517  3517 W A       : Caused by: DiscoverPrecheckException(precheckFailureReason=com.google.android.apps.search.googleapp.discover.w.a.c@9ec0e2e)
+11-18 16:19:39.517  1047  1047 W Telephony: registerMmTelCapabilityCallback: registration failed, no ImsService available. Exception: code: 1
+11-18 16:19:39.518  1047  1047 W Telephony: registerImsRegistrationCallback: registration failed, no ImsService available. Exception: code: 1
+11-18 16:19:39.695  1047  1047 W Telephony: registerMmTelCapabilityCallback: registration failed, no ImsService available. Exception: code: 1
+11-18 16:19:39.774  1397  1488 W AsyncOperation: OperationException[Status{statusCode=unknown status code: 29503, resolution=null}]
+11-18 16:19:39.776  1047  1047 W Telephony: registerMmTelCapabilityCallback: registration failed, no ImsService available. Exception: code: 1
+11-18 16:19:39.797  3517  3590 W A       : Exception while fetching versionCode for package[com.google.android.apps.tv.dreamx].
+11-18 16:19:39.797  3517  3590 W A       : android.content.pm.PackageManager$NameNotFoundException: com.google.android.apps.tv.dreamx
+11-18 16:19:39.802  3517  3590 W A       : Exception while fetching versionCode for package[com.google.android.apps.tv.launcherx].
+11-18 16:19:39.802  3517  3590 W A       : android.content.pm.PackageManager$NameNotFoundException: com.google.android.apps.tv.launcherx
+11-18 16:19:40.652  1725  3869 E TaskWorkerFactory: java.lang.NoSuchMethodException: com.android.devicelockcontroller.provision.worker.DeviceCheckInWorker.<init> [class android.content.Context, class androidx.work.WorkerParameters, interface com.google.common.util.concurrent.ListeningExecutorService]
+11-18 16:19:43.054  3517  3517 W SnapshotHandler: java.io.FileNotFoundException: /data/user/0/com.google.android.googlequicksearchbox/files/phenotype/shared/com.google.android.libraries.notifications#com.google.android.googlequicksearchbox.pb: open failed: ENOENT (No such file or directory)
+11-18 16:19:43.054  3517  3517 W SnapshotHandler: Caused by: android.system.ErrnoException: open failed: ENOENT (No such file or directory)
+11-18 16:19:43.104  3517  3581 W SnapshotHandler: java.io.FileNotFoundException: /data/user/0/com.google.android.googlequicksearchbox/files/phenotype/shared/com.google.android.libraries.notifications.platform#com.google.android.googlequicksearchbox.pb: open failed: ENOENT (No such file or directory)
+11-18 16:19:43.104  3517  3581 W SnapshotHandler: Caused by: android.system.ErrnoException: open failed: ENOENT (No such file or directory)
+11-18 16:19:43.248  1397  1410 W FontLog : java.util.concurrent.TimeoutException: Waited 10000 milliseconds (plus 406130 nanoseconds delay) for dlrl@24312a4[status=PENDING]
+11-18 16:19:43.273  1755  2037 D StrictMode: 	at android.os.Parcel.readExceptionCode(Parcel.java:3002)
+11-18 16:19:43.273  1755  2037 D StrictMode: 	at android.database.DatabaseUtils.readExceptionFromParcel(DatabaseUtils.java:139)
+11-18 16:19:43.273  1755  2037 D StrictMode: 	at android.os.Parcel.readExceptionCode(Parcel.java:3002)
+11-18 16:19:43.273  1755  2037 D StrictMode: 	at android.database.DatabaseUtils.readExceptionFromParcel(DatabaseUtils.java:139)
+11-18 16:19:43.273  1755  2037 D StrictMode: 	at android.os.Parcel.readExceptionCode(Parcel.java:3002)
+11-18 16:19:43.273  1755  2037 D StrictMode: 	at android.database.DatabaseUtils.readExceptionFromParcel(DatabaseUtils.java:139)
+11-18 16:19:43.774  1452  2813 W Icing   : Failed to get Lockbox signed-in status: java.util.concurrent.TimeoutException: Timed out waiting for Task
+11-18 16:19:43.835  1397  2821 E dlpn    : RuntimeException while executing runnable dlqc{qze@3896190} with executor MoreExecutors.directExecutor()
+11-18 16:19:43.835  1397  2821 E dlpn    : java.lang.NullPointerException: Attempt to get length of null array
+11-18 16:19:43.904  1397  3847 I NearbyDiscovery: java.util.concurrent.TimeoutException: Timed out waiting for Task
+11-18 16:19:44.016  1452  3451 E constellation: java.io.IOException: AUTHENTICATION_FAILED
+11-18 16:19:44.209  1397  3837 W Conscrypt: Could not set socket write timeout: java.net.SocketException: Socket closed
+11-18 16:19:44.477  3517  3622 E cr_CronetUrlRequestContext: Exception in upload method
+11-18 16:19:44.583  1397  3837 W Conscrypt: Could not set socket write timeout: java.net.SocketException: Socket closed
+11-18 16:19:44.624  1755  2037 D StrictMode: 	at android.os.Parcel.readExceptionCode(Parcel.java:3002)
+11-18 16:19:44.624  1755  2037 D StrictMode: 	at android.database.DatabaseUtils.readExceptionFromParcel(DatabaseUtils.java:139)
+11-18 16:19:44.624  1755  2037 D StrictMode: 	at android.os.Parcel.readExceptionCode(Parcel.java:3002)
+11-18 16:19:44.624  1755  2037 D StrictMode: 	at android.database.DatabaseUtils.readExceptionFromParcel(DatabaseUtils.java:139)
+11-18 16:19:45.028  1397  1410 W Looper  : java.lang.RuntimeException: Handler (acdu) {2735fe0} sendMessageAtTime() called with no mQueue
+11-18 16:19:45.028  1397  1410 W Looper  : java.lang.RuntimeException: Handler (acdu) {2735fe0} sendMessageAtTime() called with no mQueue
+11-18 16:19:45.030  1397  1410 W Looper  : java.lang.RuntimeException: Handler (acdu) {2735fe0} sendMessageAtTime() called with no mQueue
+11-18 16:19:45.030  1397  1410 W Looper  : java.lang.RuntimeException: Handler (acdu) {2735fe0} sendMessageAtTime() called with no mQueue
+11-18 16:19:45.031  1397  1410 W Looper  : java.lang.RuntimeException: Handler (acdu) {2735fe0} sendMessageAtTime() called with no mQueue
+11-18 16:19:45.031  1397  1410 W Looper  : java.lang.RuntimeException: Handler (acdu) {2735fe0} sendMessageAtTime() called with no mQueue
+11-18 16:19:45.031  1397  1410 W Looper  : java.lang.RuntimeException: Handler (acdu) {2735fe0} sendMessageAtTime() called with no mQueue
+11-18 16:19:45.032  1397  1410 W Looper  : java.lang.RuntimeException: Handler (acdu) {2735fe0} sendMessageAtTime() called with no mQueue
+11-18 16:19:45.433  1048  1086 E SystemServiceRegistry: android.os.ServiceManager$ServiceNotFoundException: No service published for: ethernet
+11-18 16:19:45.468  1397  3754 W SemanticLocation: java.util.concurrent.TimeoutException: Waited 5000 milliseconds (plus 2 milliseconds, 630517 nanoseconds delay) for dlnx@d1d6e00[status=PENDING, info=[function=[bzrs@10c0639]]]
+11-18 16:19:45.588  1397  3847 I NearbyDiscovery: java.util.concurrent.TimeoutException: Timed out waiting for Task
+11-18 16:19:45.672   521   549 E PackageManager: java.util.concurrent.TimeoutException: [Optimistic Bind] Didn't bind to resolver in time!
+11-18 16:19:45.777  1452  3734 W Conscrypt: Could not set socket write timeout: java.net.SocketException: Socket closed
+11-18 16:19:45.798  1452  3734 W Conscrypt: Could not set socket write timeout: java.net.SocketException: Socket closed
+11-18 16:19:45.827  1452  3427 I BlockstoreStorage: Clearing Blockstore Data for package com.aistudio.armadilloescape.xwqrpz [CONTEXT service_id=258 ]
+11-18 16:19:45.900  1397  3177 W Conscrypt: Could not set socket write timeout: java.net.SocketException: Socket closed
+11-18 16:19:45.963  1452  3735 W GCM-GMS : Failed to get direct boot token: java.io.IOException: AUTHENTICATION_FAILED
+11-18 16:19:45.964  1452  3060 W GCM-GMS : Failed to get registration: java.io.IOException: AUTHENTICATION_FAILED
+11-18 16:19:46.212   521  2009 W FileUtils: android.system.ErrnoException: chmod failed: ENOENT (No such file or directory)
+11-18 16:19:46.490  1397  3177 W Conscrypt: Could not set socket write timeout: java.net.SocketException: Socket closed
+11-18 16:19:46.631  1397  3847 I NearbyDiscovery: java.util.concurrent.TimeoutException: Timed out waiting for Task
+11-18 16:19:46.765  3953  4223 E PhenotypeFlagCommitter: java.util.concurrent.TimeoutException: Timed out waiting for Task
+11-18 16:19:46.962  1047  1047 E PhoneInterfaceManager: isVoNrEnabled: CommandException: com.android.internal.telephony.CommandException: REQUEST_NOT_SUPPORTED
+11-18 16:19:46.967  1047  1047 E PhoneInterfaceManager: isVoNrEnabled: CommandException: com.android.internal.telephony.CommandException: REQUEST_NOT_SUPPORTED
+11-18 16:19:47.188  1048  1086 E HardwareInfoFeatureProviderImpl: java.lang.NumberFormatException: For input string: "E"
+11-18 16:19:48.171  1397  3847 I NearbyDiscovery: java.util.concurrent.TimeoutException: Timed out waiting for Task
+11-18 16:19:48.581  4435  4552 W BugleRcs: android.content.pm.PackageManager$NameNotFoundException: com.google.android.ims
+11-18 16:19:49.458  1397  3754 I SemanticLocation: java.io.FileNotFoundException: /data/user/0/com.google.android.gms/files/default_model_bundle_metadata.pb: open failed: ENOENT (No such file or directory)
+11-18 16:19:49.458  1397  3754 I SemanticLocation: Caused by: android.system.ErrnoException: open failed: ENOENT (No such file or directory)
+11-18 16:19:49.469  1397  3754 I SemanticLocation: java.io.FileNotFoundException: /data/user/0/com.google.android.gms/files/model_bundle_metadata.pb: open failed: ENOENT (No such file or directory)
+11-18 16:19:49.469  1397  3754 I SemanticLocation: Caused by: android.system.ErrnoException: open failed: ENOENT (No such file or directory)
+11-18 16:19:49.811  1397  3754 I SemanticLocation: java.io.FileNotFoundException: /data/user/0/com.google.android.gms/files/model_bundle_metadata.pb: open failed: ENOENT (No such file or directory)
+11-18 16:19:49.811  1397  3754 I SemanticLocation: Caused by: android.system.ErrnoException: open failed: ENOENT (No such file or directory)
+11-18 16:19:49.822  1397  2137 E bwel    : java.util.concurrent.TimeoutException: Timed out waiting for Task
+11-18 16:19:50.109  1397  3202 W Conscrypt: Could not set socket write timeout: java.net.SocketException: Socket closed
+11-18 16:19:50.210  1397  3202 W Conscrypt: Could not set socket write timeout: java.net.SocketException: Socket closed
+11-18 16:19:50.272  1397  3202 W GLSUser : [AppCertManager] Exception while requesting key: 
+11-18 16:19:50.272  1397  3202 W GLSUser : java.io.IOException: Invalid device key response.
+11-18 16:19:52.014  1452  1494 W Conscrypt: Could not set socket write timeout: java.net.SocketException: Socket closed
+11-18 16:19:52.086  1452  1494 W Conscrypt: Could not set socket write timeout: java.net.SocketException: Socket closed
+11-18 16:19:52.184  1644  2430 W ModernMediaScanner: android.database.sqlite.SQLiteConstraintException: UNIQUE constraint failed: files._data (code 2067 SQLITE_CONSTRAINT_UNIQUE)
+11-18 16:19:52.430  1452  3430 W PhenotypeRegOp: java.util.concurrent.TimeoutException: Timed out waiting for Task
