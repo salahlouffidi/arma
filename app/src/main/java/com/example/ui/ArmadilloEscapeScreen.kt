@@ -31,6 +31,7 @@ import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
+import androidx.compose.foundation.layout.safeDrawingPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
@@ -69,6 +70,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.withFrameNanos
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.AbsoluteAlignment
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -137,12 +139,19 @@ fun ArmadilloEscapeScreen(
     val progressManager = remember { StageProgressManager(context) }
     val soundManager = remember { SoundManager(context) }
 
-    var currentScreen by remember { mutableStateOf(GameScreenState.INTRO) }
+    // Survives activity recreation (font scale/locale change, process death). An interrupted
+    // round is restored to the round list instead of replaying the intro.
+    var currentScreen by rememberSaveable(
+        stateSaver = androidx.compose.runtime.saveable.Saver<GameScreenState, String>(
+            save = { if (it == GameScreenState.GAMEPLAY) GameScreenState.STAGE_SELECT.name else it.name },
+            restore = { runCatching { GameScreenState.valueOf(it) }.getOrDefault(GameScreenState.MAIN_MENU) }
+        )
+    ) { mutableStateOf(GameScreenState.INTRO) }
     var activeMatchConfig by remember { mutableStateOf(MatchConfig.solo()) }
     var showAudioSettings by remember { mutableStateOf(false) }
 
     var highestUnlockedStage by remember { mutableIntStateOf(progressManager.getHighestUnlockedStage()) }
-    var currentStageId by remember { mutableIntStateOf(1) }
+    var currentStageId by rememberSaveable { mutableIntStateOf(1) }
     var showStageSelector by remember { mutableStateOf(false) }
     var stageClearDialogData by remember { mutableStateOf<StageClearData?>(null) }
     var gameOverDialogData by remember { mutableStateOf<GameOverData?>(null) }
@@ -441,8 +450,8 @@ fun ArmadilloEscapeScreen(
                 modifier = Modifier
                     .fillMaxSize()
                     .background(Color(0xFF140D08))
-                    .statusBarsPadding()
-                    .navigationBarsPadding()
+                    // Android 15+ edge-to-edge: keep HUD/joysticks clear of bars AND cutouts
+                    .safeDrawingPadding()
             ) {
         val density = LocalDensity.current
         val screenWidth = constraints.maxWidth.toFloat()

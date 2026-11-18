@@ -14,6 +14,8 @@ import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
+import androidx.compose.foundation.layout.safeDrawingPadding
+import com.example.game.StageTheme
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -49,17 +51,8 @@ fun GameModeSelectScreen(
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .background(
-                brush = Brush.verticalGradient(
-                    colors = listOf(
-                        Color(0xFF1F0F06),
-                        Color(0xFF140903),
-                        Color(0xFF0D0502)
-                    )
-                )
-            )
-            .statusBarsPadding()
-            .navigationBarsPadding()
+            .proBackdrop(StageTheme.JUNGLE, dim = 0.72f)
+            .safeDrawingPadding()
     ) {
         Column(
             modifier = Modifier

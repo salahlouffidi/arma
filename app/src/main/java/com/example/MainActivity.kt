@@ -1,6 +1,7 @@
 package com.example
 
 import android.app.PictureInPictureParams
+import android.content.pm.ActivityInfo
 import android.content.pm.PackageManager
 import android.content.res.Configuration
 import android.os.Build
@@ -20,6 +21,9 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.unit.LayoutDirection
 import androidx.lifecycle.lifecycleScope
+import androidx.core.view.WindowCompat
+import androidx.core.view.WindowInsetsCompat
+import androidx.core.view.WindowInsetsControllerCompat
 import com.example.ads.AdManager
 import com.example.ads.ConsentManager
 import com.example.ui.ArmadilloEscapeScreen
@@ -42,6 +46,7 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         // Orientation preference (landscape) is declared in the manifest; on large screens
         // Android 16+ may ignore it, and the UI adapts to any size / orientation.
+        applyOrientationPolicy()
         enableEdgeToEdge()
 
         consentManager = ConsentManager(this)
@@ -74,6 +79,25 @@ class MainActivity : ComponentActivity() {
                 }
             }
         }
+    }
+
+    /**
+     * Phones: landscape (either side, follows the sensor) — the arena and twin joysticks are
+     * designed for it. Tablets / foldables / desktop windows (smallest width >= 600dp): no
+     * restriction, the layout adapts to any size and orientation (Android 16 large-screen rules).
+     */
+    private fun applyOrientationPolicy() {
+        requestedOrientation = if (resources.configuration.smallestScreenWidthDp >= 600) {
+            ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
+        } else {
+            ActivityInfo.SCREEN_ORIENTATION_USER_LANDSCAPE
+        }
+    }
+
+    override fun onConfigurationChanged(newConfig: Configuration) {
+        super.onConfigurationChanged(newConfig)
+        // e.g. a foldable being unfolded: re-evaluate (state is kept, activity not recreated)
+        applyOrientationPolicy()
     }
 
     private fun initializeMobileAdsOnce() {
@@ -116,6 +140,13 @@ class MainActivity : ComponentActivity() {
 
     private fun updatePipParams(active: Boolean) {
         isGameplayActive = active
+        // Immersive play area during gameplay; bars come back with a swipe and in menus.
+        try {
+            val controller = WindowCompat.getInsetsController(window, window.decorView)
+            controller.systemBarsBehavior = WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
+            if (active) controller.hide(WindowInsetsCompat.Type.systemBars())
+            else controller.show(WindowInsetsCompat.Type.systemBars())
+        } catch (t: Throwable) {}
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S &&
             packageManager.hasSystemFeature(PackageManager.FEATURE_PICTURE_IN_PICTURE)
         ) {

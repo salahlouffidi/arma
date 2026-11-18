@@ -30,6 +30,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.composed
 import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.draw.scale
@@ -103,6 +104,24 @@ fun ProBackdrop(
     )
     Box(modifier.fillMaxSize().background(Color(0xFF0B0603))) {
         Canvas(Modifier.fillMaxSize().clipToBounds()) {
+            drawBackdropScene(this, theme, dim, t)
+        }
+        content()
+    }
+}
+
+/** Same animated backdrop as [ProBackdrop], usable as a background modifier. */
+fun Modifier.proBackdrop(theme: StageTheme = StageTheme.GARDEN, dim: Float = 0.7f): Modifier = composed {
+    val t by rememberInfiniteTransition(label = "backdrop").animateFloat(
+        initialValue = 0f,
+        targetValue = 1000f,
+        animationSpec = infiniteRepeatable(tween(1_000_000, easing = LinearEasing), RepeatMode.Restart),
+        label = "t"
+    )
+    this.background(Color(0xFF0B0603)).clipToBounds().drawBehind { drawBackdropScene(this, theme, dim, t) }
+}
+
+private fun drawBackdropScene(scope: DrawScope, theme: StageTheme, dim: Float, t: Float) = with(scope) {
             val halfW = size.width * 0.47f
             val halfH = size.height * 0.40f
             val c = Offset(size.width / 2f, size.height * 0.52f)
@@ -119,9 +138,6 @@ fun ProBackdrop(
                     radius = size.maxDimension * 0.62f
                 )
             )
-        }
-        content()
-    }
 }
 
 /** Idle "attract mode": an armadillo circling, a snake tracing a figure eight, fruit bobbing. */
