@@ -17,8 +17,8 @@ android {
     applicationId = "com.aistudio.armadilloescape.xwqrpz"
     minSdk = 24
     targetSdk = 36
-    versionCode = 8
-    versionName = "2.1.1"
+    versionCode = 9
+    versionName = "2.1.2"
 
     testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     // Live AdMob units by default; opt into Google test units with: ./gradlew ... -PuseTestAds=true

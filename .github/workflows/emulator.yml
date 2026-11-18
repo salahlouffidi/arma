@@ -1,0 +1,68 @@
+name: Release launch on emulator
+
+on:
+  push:
+    branches: ["debug-release-launch", "fix-*"]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  launch:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: "9.3.1"
+      - name: Build release APK (R8, same config as Play)
+        run: gradle :app:assembleRelease --stacktrace
+      - name: Sign with a throwaway debug key
+        run: |
+          keytool -genkeypair -v -keystore ci.jks -alias ci -keyalg RSA -keysize 2048 -validity 1 -storepass android -keypass android -dname "CN=CI"
+          BT=$(ls -d $ANDROID_HOME/build-tools/* | sort -V | tail -1)
+          $BT/zipalign -f 4 app/build/outputs/apk/release/app-release-unsigned.apk aligned.apk
+          $BT/apksigner sign --ks ci.jks --ks-pass pass:android --key-pass pass:android --out armasnake-release.apk aligned.apk
+      - name: Enable KVM
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+      - name: Run on emulator
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 34
+          target: google_apis
+          arch: x86_64
+          profile: pixel_6
+          disable-animations: true
+          script: |
+            adb install -r armasnake-release.apk
+            adb logcat -c
+            adb shell am start -W -n com.aistudio.armadilloescape.xwqrpz/com.example.MainActivity || true
+            sleep 12
+            adb exec-out screencap -p > shot_1_after_launch.png
+            adb shell input tap 1800 950 || true
+            sleep 4
+            adb exec-out screencap -p > shot_2_after_tap.png
+            adb shell input tap 1200 540 || true
+            sleep 4
+            adb exec-out screencap -p > shot_3_after_tap2.png
+            adb shell pidof com.aistudio.armadilloescape.xwqrpz > pid.txt || echo "NOT RUNNING" > pid.txt
+            adb logcat -d > logcat.txt
+            adb logcat -d -b crash > crash.txt || true
+      - name: Publish results
+        if: always()
+        run: |
+          TMP=$(mktemp -d)
+          cp shot_*.png logcat.txt crash.txt pid.txt "$TMP"/ 2>/dev/null || true
+          grep -E "AndroidRuntime|FATAL|ArmaAds|ArmaConsent|com.aistudio|Exception" logcat.txt | head -300 > "$TMP/filtered.txt" || true
+          cd "$TMP"; git init -q; git checkout -q -b r; git add -A
+          git -c user.name=ci -c user.email=ci@users.noreply.github.com commit -qm "emulator ${GITHUB_SHA}" || true
+          git push -f "https://x-access-token:${{ github.token }}@github.com/${GITHUB_REPOSITORY}.git" "HEAD:refs/heads/ci-emu/${GITHUB_REF_NAME}"
