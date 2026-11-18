@@ -66,3 +66,68 @@ jobs:
         with:
           name: test-reports
           path: app/build/reports/tests/**
+
+  release:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: "9.3.1"
+
+      - name: Build release bundle + APK with R8 (unsigned in CI)
+        run: gradle :app:bundleRelease :app:assembleRelease :app:lintRelease --stacktrace --continue
+
+      - name: Audit report
+        if: always()
+        run: |
+          set +e
+          R=release-report.txt
+          {
+            echo "== commit $GITHUB_SHA"
+            echo "== outputs"; find app/build/outputs -type f \( -name '*.aab' -o -name '*.apk' -o -name 'mapping.txt' \) -exec ls -l {} \;
+            AAB=$(find app/build/outputs/bundle -name '*.aab' | head -1)
+            echo "== AAB metadata entries"; unzip -l "$AAB" | grep -i -E 'BUNDLE-METADATA|proguard|obfuscation' 
+            echo "== native libs in AAB"; unzip -l "$AAB" | grep -E '\.so$' || echo "none"
+            echo "== dex files"; unzip -l "$AAB" | grep -E '\.dex$'
+            echo "== mapping head"; head -5 app/build/outputs/mapping/release/mapping.txt
+            echo "== mapping: app classes renamed"; grep -E '^com\.example\.' app/build/outputs/mapping/release/mapping.txt | head -40
+            echo "== mapping: count app classes kept vs renamed"; grep -E '^com\.example\.[^ ]+ -> ' app/build/outputs/mapping/release/mapping.txt | awk '{ if ($1==$3":" || $1":"==$3) k++; else r++ } END { print "kept="k" renamed="r }'
+            echo "== signing"; APK=$(find app/build/outputs/apk/release -name '*.apk' | head -1); echo "$APK"
+            echo "== lint summary"; grep -o -E '[0-9]+ errors?, [0-9]+ warnings?' app/build/reports/lint-results-release.txt 2>/dev/null; grep -E 'Error:|ObsoleteSdkInt|GradleDependency|OldTargetApi|DiscouragedApi|LockedOrientation|SourceLockedOrientation|Deprecated' app/build/reports/lint-results-release.txt 2>/dev/null | head -40
+          } > $R 2>&1
+          gradle -q :app:dependencyInsight --configuration releaseRuntimeClasspath --dependency androidx.fragment:fragment >> $R 2>&1
+          gradle -q :app:dependencyInsight --configuration releaseRuntimeClasspath --dependency com.google.android.ump >> $R 2>&1
+          gradle -q :app:dependencies --configuration releaseRuntimeClasspath > deps.txt 2>&1
+          cat $R
+
+      - name: Publish report to preview branch
+        if: always() && github.event_name != 'pull_request'
+        run: |
+          set -e
+          TMP=$(mktemp -d)
+          cp release-report.txt deps.txt "$TMP"/ || true
+          cp app/build/outputs/mapping/release/mapping.txt "$TMP"/ 2>/dev/null || true
+          cp app/build/reports/lint-results-release.txt "$TMP"/ 2>/dev/null || true
+          cd "$TMP"; git init -q; git checkout -q -b r
+          git add -A
+          git -c user.name=ci -c user.email=ci@users.noreply.github.com commit -qm "release report ${GITHUB_SHA}"
+          git push -f "https://x-access-token:${{ github.token }}@github.com/${GITHUB_REPOSITORY}.git" "HEAD:refs/heads/ci-release/${GITHUB_REF_NAME}"
+
+      - name: Upload release artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-unsigned
+          path: |
+            app/build/outputs/bundle/release/*.aab
+            app/build/outputs/apk/release/*.apk
+            app/build/outputs/mapping/release/mapping.txt
+            release-report.txt

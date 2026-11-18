@@ -1,0 +1,4 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Resource shrinker safety net: raw media is referenced via R.raw, but keep it explicitly. -->
+<resources xmlns:tools="http://schemas.android.com/tools"
+    tools:keep="@raw/stage_transition,@raw/louffi_edition_logo_intro_animation_202609082217" />

@@ -17,8 +17,8 @@ android {
     applicationId = "com.aistudio.armadilloescape.xwqrpz"
     minSdk = 24
     targetSdk = 36
-    versionCode = 4
-    versionName = "1.3"
+    versionCode = 5
+    versionName = "1.4"
 
     testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
   }
@@ -42,11 +42,22 @@ android {
   buildTypes {
     release {
       isCrunchPngs = false
-      isMinifyEnabled = false
+      // R8: code shrinking + optimisation + obfuscation, and resource shrinking.
+      // mapping.txt is written to build/outputs/mapping/release/ and embedded in the
+      // AAB (BUNDLE-METADATA) so Play Console can de-obfuscate crashes/ANRs.
+      isMinifyEnabled = true
+      isShrinkResources = true
       proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
-      signingConfig = signingConfigs.getByName("release")
+      // Only sign when the upload keystore is actually present (local release machine).
+      // CI builds an unsigned bundle; secrets are never committed.
+      val releaseKeystore = file(System.getenv("KEYSTORE_PATH") ?: "${rootDir}/my-upload-key.jks")
+      signingConfig = if (releaseKeystore.exists()) signingConfigs.getByName("release") else null
     }
-    debug { signingConfig = signingConfigs.getByName("debugConfig") }
+    debug {
+      if (file("${rootDir}/debug.keystore").exists()) {
+        signingConfig = signingConfigs.getByName("debugConfig")
+      }
+    }
   }
   compileOptions {
     sourceCompatibility = JavaVersion.VERSION_11
@@ -81,6 +92,9 @@ dependencies {
   implementation("com.google.android.gms:play-services-ads:25.4.0")
   // Google User Messaging Platform (consent) — declared explicitly, not only transitively.
   implementation(libs.ump)
+  // play-services-base pulls androidx.fragment:fragment:1.1.0 transitively (flagged as
+  // outdated by Play). Pin a current stable Fragment so Gradle resolves the newer one.
+  implementation("androidx.fragment:fragment:1.8.9")
   // implementation(libs.accompanist.permissions)
   implementation(libs.androidx.activity.compose)
   // implementation(libs.androidx.camera.camera2)

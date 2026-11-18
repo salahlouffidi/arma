@@ -116,7 +116,7 @@ class SoundManager(private val context: Context) {
     fun playStageTransitionMusic() {
         if (!isSoundEnabled) return
         try {
-            val resId = context.resources.getIdentifier("stage_transition", "raw", context.packageName)
+            val resId = R.raw.stage_transition
             if (resId != 0) {
                 transitionPlayer?.release()
                 transitionPlayer = MediaPlayer.create(context, resId).apply {
