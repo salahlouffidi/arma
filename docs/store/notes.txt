@@ -1,0 +1,7 @@
+Version 2.1 — the big update!
+• New World 3: rounds 17–20 (Neon City, Deep Ocean, Candy Land, Cosmos)
+• Power-ups: Magnet, Freeze, x2 Points, Snake Shrink + Mystery Box
+• Combos, 5 fruit types and snakes that grow as you feed
+• Surprise events: Fruit Rain and Snake Frenzy
+• All-new graphics, menus and pause screen, vibration feedback
+• 3-2-1 countdown after ads, crash fix and performance improvements
