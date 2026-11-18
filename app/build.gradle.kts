@@ -21,6 +21,8 @@ android {
     versionName = "2.1"
 
     testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+    // Live AdMob units by default; opt into Google test units with: ./gradlew ... -PuseTestAds=true
+    buildConfigField("boolean", "USE_TEST_ADS", (project.findProperty("useTestAds")?.toString() == "true").toString())
   }
 
   signingConfigs {

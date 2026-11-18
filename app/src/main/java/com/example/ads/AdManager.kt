@@ -306,8 +306,13 @@ class AdManager(
         const val TEST_REWARDED_AD_UNIT_ID = "ca-app-pub-3940256099942544/5224354917"
         const val TEST_INTERSTITIAL_AD_UNIT_ID = "ca-app-pub-3940256099942544/1033173712"
 
-        /** Debug builds never request production ads. */
-        val USE_TEST_ADS: Boolean = BuildConfig.DEBUG
+        /**
+         * Production ARMASNAKE units in every build (also builds made by Google AI Studio,
+         * which are debug-signed). Test units only when built with -PuseTestAds=true.
+         * Never click your own live ads: register your phone as a test device in AdMob
+         * (Settings > Test devices) to see live ads safely with a "Test" badge.
+         */
+        val USE_TEST_ADS: Boolean = BuildConfig.USE_TEST_ADS
 
         val rewardedUnitId: String
             get() = if (USE_TEST_ADS) TEST_REWARDED_AD_UNIT_ID else PROD_REWARDED_AD_UNIT_ID
