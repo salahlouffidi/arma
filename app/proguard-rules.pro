@@ -13,3 +13,14 @@
 
 # Generic signatures / annotations are needed by Moshi & Retrofit adapters if they are used.
 -keepattributes Signature,*Annotation*,InnerClasses,EnclosingMethod
+
+# WorkManager (pulled in by Google Mobile Ads) is started by androidx.startup at process
+# launch and opens its Room database. Room instantiates the generated "<Db>_Impl" class
+# reflectively, so R8 must keep those classes and their no-arg constructors; without this
+# the release build crashes at launch with
+# "Failed to create an instance of androidx.work.impl.WorkDatabase".
+-keep class * extends androidx.room.RoomDatabase { <init>(); }
+-keep class androidx.work.impl.WorkDatabase_Impl { *; }
+-keep class androidx.work.impl.WorkDatabase { *; }
+-keep class * extends androidx.startup.Initializer { <init>(); }
+-keep class androidx.work.WorkManagerInitializer { *; }
