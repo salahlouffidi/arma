@@ -18,6 +18,7 @@ import androidx.compose.ui.graphics.drawscope.drawIntoCanvas
 import androidx.compose.ui.graphics.drawscope.rotate
 import androidx.compose.ui.graphics.drawscope.translate
 import androidx.compose.ui.graphics.drawscope.withTransform
+import androidx.compose.ui.graphics.nativeCanvas
 import kotlin.math.PI
 import kotlin.math.abs
 import kotlin.math.atan2
@@ -1325,6 +1326,13 @@ object TableRenderer {
             canvas.restore()
         }
 
+        // 3b. io-style neon aura around the body (one layer, so overlaps don't stack)
+        drawIntoCanvas { canvas ->
+            canvas.saveLayer(bounds, Paint().apply { alpha = if (snake.isStriking) 0.45f else 0.22f })
+            for (i in pts.indices step 2) drawCircle(pal.mid.lighten(0.2f), radius = rs[i] * 1.75f, center = pts[i])
+            canvas.restore()
+        }
+
         // 4. Outline + body (tail to head)
         for (i in pts.indices.reversed()) drawCircle(pal.outline, radius = rs[i] + 1.6f, center = pts[i])
         val hl = Offset(LIGHT_X, LIGHT_Y)
@@ -1617,4 +1625,135 @@ object TableRenderer {
             drawCircle(Color.White.copy(alpha = 0.7f * a), radius = r * 0.4f, center = c - Offset(r * 0.2f, r * 0.2f))
         }
     }
+
+    // =====================================================================
+    //  JUICE / "IO-STYLE" FEEDBACK (render-only, gameplay untouched)
+    //  Trails behind the armadillos, fruit pop rings with floating "+1",
+    //  hit flash and a short camera shake. Events are inferred from frame
+    //  to frame state changes so the engine does not need to know about them.
+    // =====================================================================
+
+    private class Pop(val pos: Offset, val start: Float, val color: Color, val label: String)
+
+    private val trails = HashMap<Boolean, ArrayDeque<Offset>>()
+    private val lastApplePos = HashMap<Int, Pair<Offset, FruitType>>()
+    private val pops = ArrayList<Pop>()
+    private val wasEaten = HashMap<Boolean, Boolean>()
+    private var hitAt = -10f
+    private var lastFxTime = 0f
+
+    /**
+     * Call once per frame before drawing. Returns the camera shake offset to apply to the board.
+     */
+    fun updateFx(armadillos: List<Pair<ArmadilloState, Boolean>>, apples: List<AppleItem>): Offset {
+        val t = nowSeconds()
+        if (t - lastFxTime > 1.5f) {
+            // resumed after a pause / new round: drop stale history
+            trails.clear(); lastApplePos.clear(); pops.clear(); wasEaten.clear()
+        }
+        lastFxTime = t
+
+        for ((a, blue) in armadillos) {
+            val trail = trails.getOrPut(blue) { ArrayDeque() }
+            val p = Offset(a.pos.x, a.pos.y)
+            if (a.isEaten || a.eatenScale < 0.95f) trail.clear()
+            else if (trail.isEmpty() || (trail.last() - p).getDistance() > 3f) {
+                trail.addLast(p)
+                while (trail.size > 14) trail.removeFirst()
+            }
+            val eaten = a.isEaten
+            if (eaten && wasEaten[blue] != true) {
+                hitAt = t
+                pops += Pop(p, t, Color(0xFFFF5252), "-1")
+            }
+            wasEaten[blue] = eaten
+        }
+
+        val seen = HashSet<Int>()
+        for (a in apples) {
+            seen += a.id
+            val cur = Offset(a.pos.x, a.pos.y)
+            val prev = lastApplePos[a.id]
+            if (prev != null && (prev.first - cur).getDistance() > 60f && a.dropHeight <= 0.5f && prev.second == FruitType.REGULAR_APPLE) {
+                pops += Pop(prev.first, t, Color(0xFFFFE082), "+1")
+            }
+            lastApplePos[a.id] = cur to a.fruitType
+        }
+        val gone = lastApplePos.keys.filter { it !in seen }
+        for (id in gone) {
+            val (pos, type) = lastApplePos.remove(id) ?: continue
+            val col = when (type) {
+                FruitType.ESCAPE_STAR_POWER -> Color(0xFF00E5FF)
+                FruitType.ESCAPE_GOLDEN -> Color(0xFFFFD54F)
+                else -> Color(0xFFFFE082)
+            }
+            pops += Pop(pos, t, col, if (type == FruitType.ESCAPE_STAR_POWER) "POWER!" else "+1")
+        }
+        pops.removeAll { t - it.start > 0.9f }
+
+        val k = (1f - (t - hitAt) / 0.35f).coerceIn(0f, 1f)
+        return if (k > 0f) Offset(sin(t * 90f) * 9f * k, cos(t * 75f) * 7f * k) else Offset.Zero
+    }
+
+    /** Trails go under the actors. */
+    fun drawTrails(scope: DrawScope, boardCenter: Offset) = with(scope) {
+        for ((blue, trail) in trails) {
+            if (trail.size < 3) continue
+            val col = if (blue) Color(0xFF40C4FF) else Color(0xFFFFC94D)
+            var i = 0
+            for (p in trail) {
+                val f = (i + 1f) / trail.size
+                glow(boardCenter + p, 10f + 14f * f, col.copy(alpha = 0.10f + 0.22f * f))
+                i++
+            }
+        }
+    }
+
+    private val popPaint by lazy {
+        android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG).apply {
+            textAlign = android.graphics.Paint.Align.CENTER
+            typeface = android.graphics.Typeface.create(android.graphics.Typeface.DEFAULT, android.graphics.Typeface.BOLD)
+        }
+    }
+
+    /** Pops, floating labels and hit flash go above everything (board-space + screen flash). */
+    fun drawFxOverlay(scope: DrawScope, boardCenter: Offset) = with(scope) {
+        val t = nowSeconds()
+        for (p in pops) {
+            val k = ((t - p.start) / 0.9f).coerceIn(0f, 1f)
+            val c = boardCenter + p.pos
+            val ringK = (k / 0.45f).coerceAtMost(1f)
+            if (ringK < 1f) {
+                drawCircle(p.color.copy(alpha = (1f - ringK) * 0.9f), radius = 14f + 36f * ringK, center = c, style = Stroke(5f * (1f - ringK) + 1f))
+                for (s in 0 until 6) {
+                    val a = s * 1.047f + p.start
+                    val d = 10f + 34f * ringK
+                    drawCircle(p.color.copy(alpha = 1f - ringK), radius = 3.5f * (1f - ringK) + 1f, center = c + Offset(cos(a) * d, sin(a) * d))
+                }
+            }
+            val y = c.y - 26f - 46f * k
+            val alpha = (1f - k * k)
+            drawIntoCanvas { canvas ->
+                popPaint.textSize = if (p.label.length > 2) 30f else 38f
+                popPaint.style = android.graphics.Paint.Style.STROKE
+                popPaint.strokeWidth = 6f
+                popPaint.color = android.graphics.Color.argb((alpha * 200).toInt(), 20, 10, 4)
+                canvas.nativeCanvas.drawText(p.label, c.x, y, popPaint)
+                popPaint.style = android.graphics.Paint.Style.FILL
+                popPaint.color = android.graphics.Color.argb((alpha * 255).toInt(), (p.color.red * 255).toInt(), (p.color.green * 255).toInt(), (p.color.blue * 255).toInt())
+                canvas.nativeCanvas.drawText(p.label, c.x, y, popPaint)
+            }
+        }
+        val flash = (1f - (t - hitAt) / 0.45f).coerceIn(0f, 1f)
+        if (flash > 0f) {
+            drawRect(
+                Brush.radialGradient(
+                    0f to Color.Transparent, 0.55f to Color.Transparent, 1f to Color(0xFFFF1744).copy(alpha = 0.55f * flash),
+                    center = Offset(size.width / 2f, size.height / 2f), radius = size.maxDimension * 0.7f
+                ),
+                size = size
+            )
+        }
+    }
+
 }

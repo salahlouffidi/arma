@@ -97,6 +97,7 @@ import com.example.game.MatchConfig
 import com.example.game.CharacterId
 import com.example.game.RoleType
 import com.example.game.TableRenderer
+import androidx.compose.ui.graphics.drawscope.withTransform
 import com.example.game.Vector2
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
@@ -482,59 +483,71 @@ fun ArmadilloEscapeScreen(
             @Suppress("UNUSED_VARIABLE")
             val currentTick = tick
 
-            // 1. Draw Fixed Themed Table
-            TableRenderer.drawTable(
-                scope = this,
-                center = tableCenter,
-                halfW = tableHalfW,
-                halfH = tableHalfH,
-                theme = gameEngine.currentStage.theme
+            val shake = TableRenderer.updateFx(
+                buildList {
+                    add(gameEngine.armadillo to false)
+                    gameEngine.armadillo2?.let { add(it to true) }
+                },
+                gameEngine.apples
             )
+            withTransform({ translate(shake.x, shake.y) }) {
+                // 1. Draw Fixed Themed Table
+                TableRenderer.drawTable(
+                    scope = this,
+                    center = tableCenter,
+                    halfW = tableHalfW,
+                    halfH = tableHalfH,
+                    theme = gameEngine.currentStage.theme
+                )
 
-            // 1b. Draw Obstacles
-            TableRenderer.drawObstacles(
-                scope = this,
-                obstacles = gameEngine.obstacles,
-                boardCenter = tableCenter
-            )
+                // 1b. Draw Obstacles
+                TableRenderer.drawObstacles(
+                    scope = this,
+                    obstacles = gameEngine.obstacles,
+                    boardCenter = tableCenter
+                )
 
-            // 2. Draw Apples
-            TableRenderer.drawApples(
-                scope = this,
-                apples = gameEngine.apples,
-                boardCenter = tableCenter
-            )
+                TableRenderer.drawTrails(this, tableCenter)
 
-            // 3. Draw 3D Armadillos
-            TableRenderer.drawArmadillo(
-                scope = this,
-                armadillo = gameEngine.armadillo,
-                boardCenter = tableCenter,
-                isBlue = false
-            )
-            val a2 = gameEngine.armadillo2
-            if (a2 != null) {
+                // 2. Draw Apples
+                TableRenderer.drawApples(
+                    scope = this,
+                    apples = gameEngine.apples,
+                    boardCenter = tableCenter
+                )
+
+                // 3. Draw 3D Armadillos
                 TableRenderer.drawArmadillo(
                     scope = this,
-                    armadillo = a2,
+                    armadillo = gameEngine.armadillo,
                     boardCenter = tableCenter,
-                    isBlue = true
+                    isBlue = false
+                )
+                val a2 = gameEngine.armadillo2
+                if (a2 != null) {
+                    TableRenderer.drawArmadillo(
+                        scope = this,
+                        armadillo = a2,
+                        boardCenter = tableCenter,
+                        isBlue = true
+                    )
+                }
+
+                // 4. Draw 3D Snakes
+                TableRenderer.drawSnakes(
+                    scope = this,
+                    snakes = gameEngine.snakes,
+                    boardCenter = tableCenter
+                )
+
+                // 5. Draw Particles
+                TableRenderer.drawParticles(
+                    scope = this,
+                    particles = gameEngine.particles,
+                    boardCenter = tableCenter
                 )
             }
-
-            // 4. Draw 3D Snakes
-            TableRenderer.drawSnakes(
-                scope = this,
-                snakes = gameEngine.snakes,
-                boardCenter = tableCenter
-            )
-
-            // 5. Draw Particles
-            TableRenderer.drawParticles(
-                scope = this,
-                particles = gameEngine.particles,
-                boardCenter = tableCenter
-            )
+            TableRenderer.drawFxOverlay(this, tableCenter + shake)
         }
 
         if (isInPip) {
