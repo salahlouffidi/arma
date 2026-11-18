@@ -26,7 +26,6 @@ import com.example.game.Vector2
 import com.example.ui.MainMenuScreen
 import com.example.ui.StageSelectScreen
 import com.example.ui.theme.ArmadilloEscapeTheme
-import com.github.takahirom.roborazzi.RobolectricDeviceQualifiers
 import com.github.takahirom.roborazzi.captureRoboImage
 import kotlin.math.cos
 import kotlin.math.sin
@@ -44,8 +43,13 @@ import org.robolectric.annotation.GraphicsMode
  */
 @RunWith(RobolectricTestRunner::class)
 @GraphicsMode(GraphicsMode.Mode.NATIVE)
-@Config(qualifiers = RobolectricDeviceQualifiers.Pixel8, sdk = [36])
+@Config(qualifiers = VisualGalleryScreenshotTest.PHONE_LAND, sdk = [36])
 class VisualGalleryScreenshotTest {
+
+    companion object {
+        const val PHONE_LAND = "w915dp-h412dp-normal-long-notround-land-420dpi-keyshidden-nonav"
+        const val TABLET_LAND = "w1280dp-h800dp-xlarge-long-notround-land-240dpi-keyshidden-nonav"
+    }
 
     @get:Rule val composeTestRule = createComposeRule()
 
@@ -64,6 +68,9 @@ class VisualGalleryScreenshotTest {
     @Test fun board_ice() = capture("board_6_ice") { Board(StageTheme.ICE) }
     @Test fun board_temple() = capture("board_7_temple") { Board(StageTheme.DARK_TEMPLE) }
     @Test fun board_final() = capture("board_8_final") { Board(StageTheme.FINAL_ARENA, dual = true) }
+
+    @Config(qualifiers = TABLET_LAND)
+    @Test fun board_tablet() = capture("board_9_tablet_jungle") { Board(StageTheme.JUNGLE, dual = true) }
 
     @Test fun menu_main() = capture("menu_main") {
         val ctx = LocalContext.current

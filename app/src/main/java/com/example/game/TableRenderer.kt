@@ -5,15 +5,24 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Paint
 import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.PathEffect
 import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.StrokeJoin
 import androidx.compose.ui.graphics.drawscope.DrawScope
-import androidx.compose.ui.graphics.drawscope.Fill
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.drawscope.clipPath
+import androidx.compose.ui.graphics.drawscope.drawIntoCanvas
 import androidx.compose.ui.graphics.drawscope.rotate
+import androidx.compose.ui.graphics.drawscope.translate
 import androidx.compose.ui.graphics.drawscope.withTransform
 import kotlin.math.PI
+import kotlin.math.abs
+import kotlin.math.atan2
 import kotlin.math.cos
+import kotlin.math.max
+import kotlin.math.min
 import kotlin.math.sin
 
 object TableRenderer {
@@ -183,152 +192,647 @@ object TableRenderer {
         }
     }
 
+    // =====================================================================
+    //  SHARED LIGHTING HELPERS
+    //  One key light from the top-left of the screen drives every highlight
+    //  and shadow so the whole scene reads as a single lit tabletop.
+    // =====================================================================
+
+    private const val LIGHT_X = -0.55f
+    private const val LIGHT_Y = -0.83f
+    private const val SHADOW_DX = 5f
+    private const val SHADOW_DY = 9f
+
+    private fun nowSeconds(): Float = ((System.nanoTime() / 1_000_000L) % 1_000_000L) / 1000f
+
+    /** Light direction expressed in an object's local (rotated) frame. */
+    private fun localLight(headingRad: Float): Offset {
+        val c = cos(headingRad)
+        val s = sin(headingRad)
+        return Offset(c * LIGHT_X + s * LIGHT_Y, -s * LIGHT_X + c * LIGHT_Y)
+    }
+
+    private fun Color.darken(f: Float) = Color(red * (1f - f), green * (1f - f), blue * (1f - f), alpha)
+    private fun Color.lighten(f: Float) = Color(red + (1f - red) * f, green + (1f - green) * f, blue + (1f - blue) * f, alpha)
+
+    /** Soft, feathered elliptical shadow (radial falloff squashed into an oval). */
+    private fun DrawScope.softOval(center: Offset, rx: Float, ry: Float, alpha: Float) {
+        if (rx <= 0.5f || ry <= 0.5f) return
+        withTransform({ scale(1f, ry / rx, pivot = center) }) {
+            drawCircle(
+                brush = Brush.radialGradient(
+                    0f to Color.Black.copy(alpha = alpha),
+                    0.55f to Color.Black.copy(alpha = alpha * 0.65f),
+                    1f to Color.Transparent,
+                    center = center,
+                    radius = rx
+                ),
+                radius = rx,
+                center = center
+            )
+        }
+    }
+
+    private fun DrawScope.glow(center: Offset, radius: Float, color: Color) {
+        if (radius <= 0.5f) return
+        drawCircle(
+            brush = Brush.radialGradient(
+                0f to color,
+                0.45f to color.copy(alpha = color.alpha * 0.45f),
+                1f to Color.Transparent,
+                center = center,
+                radius = radius
+            ),
+            radius = radius,
+            center = center
+        )
+    }
+
+    private fun starPath(cx: Float, cy: Float, outer: Float, inner: Float, points: Int, rot: Float): Path =
+        Path().apply {
+            for (p in 0 until points * 2) {
+                val r = if (p % 2 == 0) outer else inner
+                val a = (p * PI / points - PI / 2.0).toFloat() + rot
+                val x = cx + cos(a) * r
+                val y = cy + sin(a) * r
+                if (p == 0) moveTo(x, y) else lineTo(x, y)
+            }
+            close()
+        }
+
+    private fun DrawScope.sparkle(center: Offset, size: Float, color: Color) {
+        val p = Path().apply {
+            moveTo(center.x, center.y - size)
+            quadraticTo(center.x, center.y, center.x + size, center.y)
+            quadraticTo(center.x, center.y, center.x, center.y + size)
+            quadraticTo(center.x, center.y, center.x - size, center.y)
+            quadraticTo(center.x, center.y, center.x, center.y - size)
+            close()
+        }
+        glow(center, size * 1.6f, color.copy(alpha = color.alpha * 0.35f))
+        drawPath(p, color)
+    }
+
+    // =====================================================================
+    //  TABLE / BOARD
+    // =====================================================================
+
+    private data class Backdrop(val inner: Color, val outer: Color, val lamp: Color)
+
+    private fun backdropFor(theme: StageTheme): Backdrop = when (theme) {
+        StageTheme.GARDEN -> Backdrop(Color(0xFF2A1A0E), Color(0xFF080503), Color(0x26FFE6B0))
+        StageTheme.DESERT -> Backdrop(Color(0xFF3A2410), Color(0xFF0E0603), Color(0x2AFFE0A0))
+        StageTheme.JUNGLE -> Backdrop(Color(0xFF12241A), Color(0xFF030805), Color(0x22D8FFC8))
+        StageTheme.MOUNTAINS -> Backdrop(Color(0xFF1E2A33), Color(0xFF05080B), Color(0x26E6F2FF))
+        StageTheme.VOLCANO -> Backdrop(Color(0xFF3A0E05), Color(0xFF070201), Color(0x22FFB080))
+        StageTheme.ICE -> Backdrop(Color(0xFF0D3440), Color(0xFF02090D), Color(0x30FFFFFF))
+        StageTheme.DARK_TEMPLE -> Backdrop(Color(0xFF221330), Color(0xFF050208), Color(0x20E6C8FF))
+        StageTheme.FINAL_ARENA -> Backdrop(Color(0xFF3A2208), Color(0xFF080401), Color(0x2EFFE7A0))
+    }
+
+    private class Board(
+        val boards: List<Pair<androidx.compose.ui.geometry.Rect, Int>>,
+        val grain: List<Path>,
+        val knots: List<Triple<Offset, Float, Float>>,
+        val cracks: List<Path>,
+        val specks: List<Triple<Offset, Float, Float>>
+    )
+
+    private var cachedKey: List<Any>? = null
+    private var cachedBoard: Board? = null
+
+    private fun boardLayout(left: Float, top: Float, width: Float, height: Float, theme: StageTheme): Board {
+        val key = listOf(left, top, width, height, theme)
+        cachedBoard?.let { if (cachedKey == key) return it }
+
+        val rnd = java.util.Random(theme.ordinal * 7919L + 17L)
+        val rows = (height / 105f).toInt().coerceIn(6, 14)
+        val rowH = height / rows
+        val boards = ArrayList<Pair<androidx.compose.ui.geometry.Rect, Int>>()
+        val grain = ArrayList<Path>()
+        val knots = ArrayList<Triple<Offset, Float, Float>>()
+
+        for (r in 0 until rows) {
+            val y0 = top + r * rowH
+            // Staggered butt joints so the floor reads as real boards, not stripes
+            var x = left - rnd.nextFloat() * width * 0.45f
+            while (x < left + width) {
+                val len = width * (0.45f + rnd.nextFloat() * 0.5f)
+                val x0 = max(x, left)
+                val x1 = min(x + len, left + width)
+                if (x1 - x0 > 4f) {
+                    boards += androidx.compose.ui.geometry.Rect(x0, y0, x1, y0 + rowH) to rnd.nextInt(8)
+                }
+                x += len
+            }
+            // Flowing grain lines
+            val lines = 3 + rnd.nextInt(3)
+            for (g in 0 until lines) {
+                val baseY = y0 + rowH * (0.15f + 0.7f * rnd.nextFloat())
+                val amp = rowH * (0.03f + rnd.nextFloat() * 0.07f)
+                val freq = 0.004f + rnd.nextFloat() * 0.01f
+                val phase = rnd.nextFloat() * 6.28f
+                val p = Path()
+                var gx = left
+                p.moveTo(gx, baseY + sin(phase) * amp)
+                while (gx < left + width) {
+                    gx += 18f
+                    p.lineTo(gx, baseY + sin(gx * freq + phase) * amp)
+                }
+                grain += p
+            }
+            if (rnd.nextFloat() < 0.55f) {
+                knots += Triple(
+                    Offset(left + width * (0.08f + 0.84f * rnd.nextFloat()), y0 + rowH * (0.3f + 0.4f * rnd.nextFloat())),
+                    rowH * (0.06f + 0.06f * rnd.nextFloat()),
+                    0.5f + rnd.nextFloat() * 0.5f
+                )
+            }
+        }
+
+        // Theme cracks (lava seams / ice fractures / stone cracks)
+        val cracks = ArrayList<Path>()
+        val crackCount = when (theme) {
+            StageTheme.VOLCANO -> 7
+            StageTheme.ICE -> 6
+            StageTheme.MOUNTAINS, StageTheme.DARK_TEMPLE -> 4
+            else -> 0
+        }
+        repeat(crackCount) {
+            val p = Path()
+            var cx = left + width * rnd.nextFloat()
+            var cy = top + height * rnd.nextFloat()
+            var ang = rnd.nextFloat() * 6.28f
+            p.moveTo(cx, cy)
+            val steps = 5 + rnd.nextInt(5)
+            repeat(steps) { s ->
+                ang += (rnd.nextFloat() - 0.5f) * 1.3f
+                val step = 18f + rnd.nextFloat() * 30f
+                cx = (cx + cos(ang) * step).coerceIn(left, left + width)
+                cy = (cy + sin(ang) * step).coerceIn(top, top + height)
+                p.lineTo(cx, cy)
+                if (s == steps / 2) {
+                    // small branch
+                    val bx = cx + cos(ang + 1.1f) * step * 0.8f
+                    val by = cy + sin(ang + 1.1f) * step * 0.8f
+                    p.lineTo(bx.coerceIn(left, left + width), by.coerceIn(top, top + height))
+                    p.moveTo(cx, cy)
+                }
+            }
+            cracks += p
+        }
+
+        val specks = ArrayList<Triple<Offset, Float, Float>>()
+        repeat(60) {
+            specks += Triple(
+                Offset(left + width * rnd.nextFloat(), top + height * rnd.nextFloat()),
+                1f + rnd.nextFloat() * 2.4f,
+                rnd.nextFloat()
+            )
+        }
+
+        val b = Board(boards, grain, knots, cracks, specks)
+        cachedKey = key
+        cachedBoard = b
+        return b
+    }
+
     fun drawTable(
         scope: DrawScope,
         center: Offset,
         halfW: Float,
         halfH: Float,
         theme: StageTheme = StageTheme.GARDEN
-    ) {
+    ) = with(scope) {
         val left = center.x - halfW
         val top = center.y - halfH
         val width = halfW * 2f
         val height = halfH * 2f
         val colors = getColorsForTheme(theme)
+        val backdrop = backdropFor(theme)
+        val t = nowSeconds()
 
-        // 1. Drop shadow of the whole wooden table on ambient background
-        scope.drawRoundRect(
-            color = Color(0x70000000),
-            topLeft = Offset(left + 8f, top + 12f),
-            size = Size(width, height),
-            cornerRadius = CornerRadius(28f, 28f)
-        )
-
-        // 2. Heavy Outer Themed Rail / Border
-        val outerBorderThickness = 22f
-        scope.drawRoundRect(
-            brush = Brush.linearGradient(
-                colors = colors.railColors,
-                start = Offset(left, top),
-                end = Offset(left + width, top + height)
+        // 0. Ambient room: theme-tinted light pool falling off into darkness
+        drawRect(
+            brush = Brush.radialGradient(
+                0f to backdrop.inner,
+                1f to backdrop.outer,
+                center = Offset(center.x, center.y - halfH * 0.2f),
+                radius = max(size.width, size.height) * 0.85f
             ),
-            topLeft = Offset(left - outerBorderThickness, top - outerBorderThickness),
-            size = Size(width + outerBorderThickness * 2f, height + outerBorderThickness * 2f),
-            cornerRadius = CornerRadius(26f, 26f)
+            size = size
         )
 
-        // Rail top highlight bevel
-        scope.drawRoundRect(
-            brush = Brush.linearGradient(
-                colors = listOf(colors.railHighlight, Color(0x05FFFFFF)),
-                start = Offset(left, top),
-                end = Offset(left + width, top + height)
-            ),
-            topLeft = Offset(left - outerBorderThickness, top - outerBorderThickness),
-            size = Size(width + outerBorderThickness * 2f, height + outerBorderThickness * 2f),
-            cornerRadius = CornerRadius(26f, 26f),
-            style = Stroke(width = 2.5f)
-        )
+        val rail = 26f
+        val outerRect = androidx.compose.ui.geometry.Rect(left - rail, top - rail, left + width + rail, top + height + rail)
+        val outerR = CornerRadius(30f, 30f)
 
-        // 3. Themed Board Surface Planks
-        val plankCount = 8
-        val plankH = height / plankCount
-        val plankColors = colors.plankColors
-
-        for (i in 0 until plankCount) {
-            val pTop = top + i * plankH
-            val pColor = plankColors[i % plankColors.size]
-
-            // Plank base
-            scope.drawRect(
-                brush = Brush.linearGradient(
-                    colors = listOf(pColor, pColor.copy(red = pColor.red * 0.9f, green = pColor.green * 0.9f)),
-                    start = Offset(left, pTop),
-                    end = Offset(left + width, pTop)
-                ),
-                topLeft = Offset(left, pTop),
-                size = Size(width, plankH)
+        // 1. Layered soft drop shadow under the whole table
+        for (i in 4 downTo 1) {
+            val grow = i * 7f
+            drawRoundRect(
+                color = Color.Black.copy(alpha = 0.10f),
+                topLeft = Offset(outerRect.left - grow + 4f, outerRect.top - grow * 0.4f + 16f),
+                size = Size(outerRect.width + grow * 2f, outerRect.height + grow * 2f),
+                cornerRadius = CornerRadius(30f + grow, 30f + grow)
             )
-
-            // Texture / grain streaks
-            val grainY1 = pTop + plankH * 0.3f
-            val grainY2 = pTop + plankH * 0.7f
-            scope.drawLine(
-                color = colors.grainLight,
-                start = Offset(left + 20f, grainY1),
-                end = Offset(left + width - 20f, grainY1),
-                strokeWidth = 1.2f
-            )
-            scope.drawLine(
-                color = colors.grainDark,
-                start = Offset(left + 40f, grainY2),
-                end = Offset(left + width - 40f, grainY2),
-                strokeWidth = 1.4f
-            )
-
-            // Plank seam groove
-            if (i > 0) {
-                scope.drawLine(
-                    color = colors.seamColor,
-                    start = Offset(left, pTop),
-                    end = Offset(left + width, pTop),
-                    strokeWidth = 2.5f
-                )
-                scope.drawLine(
-                    color = colors.seamHighlight,
-                    start = Offset(left, pTop + 1.5f),
-                    end = Offset(left + width, pTop + 1.5f),
-                    strokeWidth = 1f
-                )
-            }
         }
 
-        // 4. Center Board Decorative Inlay
-        scope.drawCircle(
-            color = colors.inlayOuter,
-            radius = 110f,
-            center = center,
+        // 2. Rail: lit from above, darker at the bottom, with bevel edges
+        drawRoundRect(
+            brush = Brush.verticalGradient(
+                colors = listOf(
+                    colors.railColors[0].lighten(0.12f),
+                    colors.railColors[0],
+                    colors.railColors[1],
+                    colors.railColors[3].darken(0.2f)
+                ),
+                startY = outerRect.top,
+                endY = outerRect.bottom
+            ),
+            topLeft = outerRect.topLeft,
+            size = outerRect.size,
+            cornerRadius = outerR
+        )
+        // grain sheen running along the rail
+        drawRoundRect(
+            brush = Brush.linearGradient(
+                0f to Color.Transparent,
+                0.35f to colors.railHighlight,
+                0.5f to Color.Transparent,
+                0.7f to colors.railHighlight.copy(alpha = colors.railHighlight.alpha * 0.5f),
+                1f to Color.Transparent,
+                start = outerRect.topLeft,
+                end = outerRect.bottomRight
+            ),
+            topLeft = outerRect.topLeft,
+            size = outerRect.size,
+            cornerRadius = outerR
+        )
+        // outer bevel: bright top edge, dark bottom edge
+        drawRoundRect(
+            brush = Brush.verticalGradient(
+                0f to Color.White.copy(alpha = 0.32f),
+                0.5f to Color.White.copy(alpha = 0.04f),
+                1f to Color.Black.copy(alpha = 0.45f),
+                startY = outerRect.top,
+                endY = outerRect.bottom
+            ),
+            topLeft = outerRect.topLeft + Offset(1.5f, 1.5f),
+            size = Size(outerRect.width - 3f, outerRect.height - 3f),
+            cornerRadius = CornerRadius(29f, 29f),
             style = Stroke(width = 3f)
         )
-        scope.drawCircle(
-            color = colors.inlayInner,
-            radius = 70f,
-            center = center,
+        drawRoundRect(
+            color = Color.Black.copy(alpha = 0.55f),
+            topLeft = outerRect.topLeft,
+            size = outerRect.size,
+            cornerRadius = outerR,
             style = Stroke(width = 1.5f)
         )
-        // Diamond points
-        val dSize = 22f
-        val diamondPath = Path().apply {
-            moveTo(center.x, center.y - dSize)
-            lineTo(center.x + dSize, center.y)
-            lineTo(center.x, center.y + dSize)
-            lineTo(center.x - dSize, center.y)
-            close()
+        // inner lip (light catches the inner edge at the bottom, shadowed at top)
+        drawRoundRect(
+            brush = Brush.verticalGradient(
+                0f to Color.Black.copy(alpha = 0.6f),
+                1f to Color.White.copy(alpha = 0.22f),
+                startY = top - 6f,
+                endY = top + height + 6f
+            ),
+            topLeft = Offset(left - 5f, top - 5f),
+            size = Size(width + 10f, height + 10f),
+            cornerRadius = CornerRadius(17f, 17f),
+            style = Stroke(width = 4f)
+        )
+
+        // 3. Playing surface (clipped)
+        val surface = Path().apply {
+            addRoundRect(androidx.compose.ui.geometry.RoundRect(left, top, left + width, top + height, CornerRadius(14f, 14f)))
         }
-        scope.drawPath(diamondPath, color = colors.diamondColor, style = Fill)
-        scope.drawPath(diamondPath, color = colors.diamondColor.copy(alpha = 0.5f), style = Stroke(width = 1.5f))
+        val layout = boardLayout(left, top, width, height, theme)
+        clipPath(surface) {
+            // boards
+            for ((rect, ci) in layout.boards) {
+                val base = colors.plankColors[ci % colors.plankColors.size]
+                drawRect(
+                    brush = Brush.verticalGradient(
+                        colors = listOf(base.lighten(0.06f), base, base.darken(0.08f)),
+                        startY = rect.top,
+                        endY = rect.bottom
+                    ),
+                    topLeft = rect.topLeft,
+                    size = rect.size
+                )
+            }
+            // grain
+            for ((i, g) in layout.grain.withIndex()) {
+                drawPath(
+                    g,
+                    color = if (i % 3 == 0) colors.grainLight else colors.grainDark.copy(alpha = min(1f, colors.grainDark.alpha * 1.8f)),
+                    style = Stroke(width = if (i % 2 == 0) 1.1f else 1.8f)
+                )
+            }
+            // knots
+            for ((pos, r, squash) in layout.knots) {
+                withTransform({ scale(2.2f, squash, pivot = pos) }) {
+                    drawCircle(colors.grainDark.copy(alpha = 0.28f), radius = r * 1.6f, center = pos, style = Stroke(1f))
+                    drawCircle(colors.grainDark.copy(alpha = 0.22f), radius = r * 1.1f, center = pos, style = Stroke(1f))
+                    drawCircle(colors.seamColor.copy(alpha = 0.45f), radius = r * 0.6f, center = pos)
+                }
+            }
+            // seams: dark groove + light lower lip
+            for ((rect, _) in layout.boards) {
+                drawLine(colors.seamColor, Offset(rect.left, rect.top), Offset(rect.right, rect.top), strokeWidth = 2.2f)
+                drawLine(colors.seamHighlight, Offset(rect.left, rect.top + 1.8f), Offset(rect.right, rect.top + 1.8f), strokeWidth = 1f)
+                drawLine(colors.seamColor, Offset(rect.left, rect.top), Offset(rect.left, rect.bottom), strokeWidth = 2f)
+                drawLine(colors.seamHighlight, Offset(rect.left + 1.6f, rect.top), Offset(rect.left + 1.6f, rect.bottom), strokeWidth = 0.8f)
+            }
 
-        // 5. Deep Inner Shadow around Table Edge (Cushion / Well effect)
-        scope.drawRoundRect(
-            color = Color(0x60000000),
-            topLeft = Offset(left, top),
-            size = Size(width, height),
-            cornerRadius = CornerRadius(14f, 14f),
-            style = Stroke(width = 10f)
-        )
-        scope.drawRoundRect(
-            color = Color(0x28000000),
-            topLeft = Offset(left + 6f, top + 6f),
-            size = Size(width - 12f, height - 12f),
-            cornerRadius = CornerRadius(10f, 10f),
-            style = Stroke(width = 8f)
-        )
+            drawThemeSurfaceFx(this, theme, layout, center, left, top, width, height, t)
 
-        // 6. Polished Themed Corner Brackets
-        drawThemedCorner(scope, left, top, 0f, colors)
-        drawThemedCorner(scope, left + width, top, 90f, colors)
-        drawThemedCorner(scope, left + width, top + height, 180f, colors)
-        drawThemedCorner(scope, left, top + height, 270f, colors)
+            // centre medallion
+            drawMedallion(this, center, min(halfW, halfH) * 0.30f, colors, theme, t)
+
+            // overhead lamp highlight + edge vignette
+            drawRect(
+                brush = Brush.radialGradient(
+                    0f to backdrop.lamp,
+                    0.6f to backdrop.lamp.copy(alpha = backdrop.lamp.alpha * 0.3f),
+                    1f to Color.Transparent,
+                    center = Offset(center.x - halfW * 0.18f, center.y - halfH * 0.35f),
+                    radius = max(halfW, halfH) * 1.15f
+                ),
+                topLeft = Offset(left, top),
+                size = Size(width, height)
+            )
+            drawRect(
+                brush = Brush.radialGradient(
+                    0f to Color.Transparent,
+                    0.7f to Color.Transparent,
+                    1f to Color.Black.copy(alpha = 0.42f),
+                    center = center,
+                    radius = Offset(halfW, halfH).getDistance()
+                ),
+                topLeft = Offset(left, top),
+                size = Size(width, height)
+            )
+            // rail casts a shadow onto the surface (strongest at the top)
+            drawRect(
+                brush = Brush.verticalGradient(listOf(Color.Black.copy(alpha = 0.55f), Color.Transparent), startY = top, endY = top + 26f),
+                topLeft = Offset(left, top), size = Size(width, 26f)
+            )
+            drawRect(
+                brush = Brush.horizontalGradient(listOf(Color.Black.copy(alpha = 0.38f), Color.Transparent), startX = left, endX = left + 18f),
+                topLeft = Offset(left, top), size = Size(18f, height)
+            )
+            drawRect(
+                brush = Brush.horizontalGradient(listOf(Color.Transparent, Color.Black.copy(alpha = 0.30f)), startX = left + width - 14f, endX = left + width),
+                topLeft = Offset(left + width - 14f, top), size = Size(14f, height)
+            )
+            drawRect(
+                brush = Brush.verticalGradient(listOf(Color.Transparent, Color.Black.copy(alpha = 0.22f)), startY = top + height - 10f, endY = top + height),
+                topLeft = Offset(left, top + height - 10f), size = Size(width, 10f)
+            )
+        }
+
+        // 4. Theme decorations that sit on / overhang the rail
+        drawRailDecor(this, theme, left, top, width, height, rail)
+
+        // 5. Metal corner brackets
+        drawThemedCorner(this, left - rail, top - rail, 0f, colors)
+        drawThemedCorner(this, left + width + rail, top - rail, 90f, colors)
+        drawThemedCorner(this, left + width + rail, top + height + rail, 180f, colors)
+        drawThemedCorner(this, left - rail, top + height + rail, 270f, colors)
+    }
+
+    private fun drawMedallion(
+        scope: DrawScope,
+        c: Offset,
+        r: Float,
+        colors: TableThemeColors,
+        theme: StageTheme,
+        t: Float
+    ) = with(scope) {
+        val accent = colors.cornerColors[1]
+        // inset well
+        drawCircle(
+            brush = Brush.radialGradient(
+                0f to Color.Black.copy(alpha = 0.0f),
+                0.85f to Color.Black.copy(alpha = 0.10f),
+                1f to Color.Black.copy(alpha = 0.22f),
+                center = c, radius = r
+            ),
+            radius = r, center = c
+        )
+        drawCircle(accent.copy(alpha = 0.30f), radius = r, center = c, style = Stroke(3f))
+        drawCircle(Color.White.copy(alpha = 0.08f), radius = r + 2.5f, center = c, style = Stroke(1f))
+        drawCircle(
+            accent.copy(alpha = 0.22f), radius = r * 0.78f, center = c,
+            style = Stroke(1.5f, pathEffect = PathEffect.dashPathEffect(floatArrayOf(6f, 6f)))
+        )
+        drawCircle(accent.copy(alpha = 0.18f), radius = r * 0.55f, center = c, style = Stroke(1.5f))
+        // compass rose
+        val rot = if (theme == StageTheme.DARK_TEMPLE || theme == StageTheme.FINAL_ARENA) t * 0.15f else 0f
+        val rose = starPath(c.x, c.y, r * 0.5f, r * 0.14f, 4, rot)
+        drawPath(rose, colors.diamondColor)
+        drawPath(rose, accent.copy(alpha = 0.35f), style = Stroke(1.2f))
+        val rose2 = starPath(c.x, c.y, r * 0.3f, r * 0.1f, 4, rot + (PI / 4).toFloat())
+        drawPath(rose2, colors.diamondColor.copy(alpha = colors.diamondColor.alpha * 0.7f))
+        drawCircle(accent.copy(alpha = 0.45f), radius = 3f, center = c)
+    }
+
+    private fun drawThemeSurfaceFx(
+        scope: DrawScope,
+        theme: StageTheme,
+        layout: Board,
+        center: Offset,
+        left: Float,
+        top: Float,
+        width: Float,
+        height: Float,
+        t: Float
+    ) = with(scope) {
+        when (theme) {
+            StageTheme.VOLCANO -> {
+                val pulse = 0.75f + 0.25f * sin(t * 2.2f)
+                for (c in layout.cracks) {
+                    drawPath(c, Color(0xFFFF3D00).copy(alpha = 0.22f * pulse), style = Stroke(12f, cap = StrokeCap.Round, join = StrokeJoin.Round))
+                    drawPath(c, Color(0xFFFF6D00).copy(alpha = 0.55f * pulse), style = Stroke(4.5f, cap = StrokeCap.Round, join = StrokeJoin.Round))
+                    drawPath(c, Color(0xFFFFE082).copy(alpha = 0.9f), style = Stroke(1.4f, cap = StrokeCap.Round, join = StrokeJoin.Round))
+                }
+                for ((p, s, ph) in layout.specks.take(24)) {
+                    val a = (0.5f + 0.5f * sin(t * 3f + ph * 6.28f)) * 0.7f
+                    drawCircle(Color(0xFFFF9100).copy(alpha = a), radius = s, center = p)
+                }
+            }
+            StageTheme.ICE -> {
+                // frosted sheen and fractures
+                drawRect(
+                    brush = Brush.linearGradient(
+                        0f to Color.White.copy(alpha = 0.0f),
+                        0.45f to Color.White.copy(alpha = 0.18f),
+                        0.5f to Color.White.copy(alpha = 0.0f),
+                        0.62f to Color.White.copy(alpha = 0.10f),
+                        0.68f to Color.White.copy(alpha = 0.0f),
+                        start = Offset(left, top), end = Offset(left + width, top + height)
+                    ),
+                    topLeft = Offset(left, top), size = Size(width, height)
+                )
+                for (c in layout.cracks) {
+                    drawPath(c, Color(0xFF006064).copy(alpha = 0.25f), style = Stroke(2.4f))
+                    drawPath(c, Color.White.copy(alpha = 0.7f), style = Stroke(0.9f))
+                }
+                for ((p, s, ph) in layout.specks.take(18)) {
+                    val a = (0.5f + 0.5f * sin(t * 2.5f + ph * 6.28f)).let { it * it }
+                    if (a > 0.15f) sparkle(p, s * 2.2f, Color.White.copy(alpha = a))
+                }
+            }
+            StageTheme.MOUNTAINS -> {
+                for (c in layout.cracks) {
+                    drawPath(c, Color.Black.copy(alpha = 0.35f), style = Stroke(2f))
+                    drawPath(c, Color.White.copy(alpha = 0.10f), style = Stroke(1f))
+                }
+                for ((p, s, _) in layout.specks) drawCircle(Color.White.copy(alpha = 0.35f), radius = s * 0.8f, center = p)
+            }
+            StageTheme.DARK_TEMPLE -> {
+                for (c in layout.cracks) drawPath(c, Color.Black.copy(alpha = 0.45f), style = Stroke(2f))
+                // rune ring around the medallion
+                val r = min(width, height) * 0.5f * 0.42f
+                val glowA = 0.35f + 0.25f * sin(t * 1.6f)
+                drawCircle(Color(0xFFD500F9).copy(alpha = glowA * 0.4f), radius = r, center = center, style = Stroke(8f))
+                drawCircle(Color(0xFFEA80FC).copy(alpha = glowA), radius = r, center = center, style = Stroke(1.5f))
+                for (i in 0 until 12) {
+                    val a = i * (PI.toFloat() / 6f) + t * 0.1f
+                    val p = Offset(center.x + cos(a) * r, center.y + sin(a) * r)
+                    rotate(a * 57.3f, pivot = p) {
+                        drawRect(Color(0xFFEA80FC).copy(alpha = glowA), topLeft = p - Offset(1.5f, 7f), size = Size(3f, 14f))
+                        drawRect(Color(0xFFEA80FC).copy(alpha = glowA), topLeft = p - Offset(6f, 1.5f), size = Size(6f, 3f))
+                    }
+                }
+            }
+            StageTheme.DESERT -> {
+                // wind-blown sand drifts
+                val rnd = java.util.Random(99)
+                repeat(7) {
+                    val p = Offset(left + width * rnd.nextFloat(), top + height * rnd.nextFloat())
+                    val rx = 60f + rnd.nextFloat() * 120f
+                    withTransform({ scale(1f, 0.35f, pivot = p) }) {
+                        drawCircle(
+                            brush = Brush.radialGradient(
+                                0f to Color(0x55F6D7A7), 1f to Color.Transparent, center = p, radius = rx
+                            ),
+                            radius = rx, center = p
+                        )
+                    }
+                }
+                for ((p, s, _) in layout.specks) drawCircle(Color(0x30FFF3D6), radius = s * 0.7f, center = p)
+            }
+            StageTheme.FINAL_ARENA -> {
+                val inset = 22f
+                drawRoundRect(
+                    color = Color(0xFFFFD700).copy(alpha = 0.35f),
+                    topLeft = Offset(left + inset, top + inset),
+                    size = Size(width - inset * 2f, height - inset * 2f),
+                    cornerRadius = CornerRadius(10f, 10f),
+                    style = Stroke(2f)
+                )
+                drawRoundRect(
+                    color = Color(0xFFFF1744).copy(alpha = 0.25f),
+                    topLeft = Offset(left + inset + 6f, top + inset + 6f),
+                    size = Size(width - inset * 2f - 12f, height - inset * 2f - 12f),
+                    cornerRadius = CornerRadius(8f, 8f),
+                    style = Stroke(1.2f, pathEffect = PathEffect.dashPathEffect(floatArrayOf(10f, 6f)))
+                )
+            }
+            StageTheme.JUNGLE, StageTheme.GARDEN -> {
+                // dappled light through leaves
+                val rnd = java.util.Random(theme.ordinal + 5L)
+                repeat(10) {
+                    val p = Offset(left + width * rnd.nextFloat(), top + height * rnd.nextFloat())
+                    val rr = 30f + rnd.nextFloat() * 60f
+                    val sway = sin(t * 0.8f + it) * 6f
+                    drawCircle(
+                        brush = Brush.radialGradient(
+                            0f to Color(0x1CFFF3C0), 1f to Color.Transparent,
+                            center = p + Offset(sway, 0f), radius = rr
+                        ),
+                        radius = rr, center = p + Offset(sway, 0f)
+                    )
+                }
+            }
+        }
+    }
+
+    private fun drawRailDecor(
+        scope: DrawScope,
+        theme: StageTheme,
+        left: Float,
+        top: Float,
+        width: Float,
+        height: Float,
+        rail: Float
+    ) = with(scope) {
+        when (theme) {
+            StageTheme.JUNGLE, StageTheme.GARDEN -> {
+                val leafA = if (theme == StageTheme.JUNGLE) Color(0xFF2E7D32) else Color(0xFF558B2F)
+                val leafB = if (theme == StageTheme.JUNGLE) Color(0xFF1B5E20) else Color(0xFF33691E)
+                val corners = listOf(
+                    Offset(left - rail * 0.4f, top - rail * 0.4f) to 35f,
+                    Offset(left + width + rail * 0.4f, top + height + rail * 0.4f) to 215f
+                )
+                for ((p, base) in corners) {
+                    for (i in 0 until 5) {
+                        val ang = base + (i - 2) * 22f
+                        drawLeaf(this, p, ang, 34f + (i % 2) * 10f, leafA, leafB)
+                    }
+                }
+                if (theme == StageTheme.GARDEN) {
+                    // tiny flowers on the leaf clusters
+                    val fl = listOf(Offset(left + 14f, top - 6f), Offset(left - 6f, top + 16f), Offset(left + width - 12f, top + height + 4f))
+                    for ((i, f) in fl.withIndex()) {
+                        val col = if (i % 2 == 0) Color(0xFFFFF59D) else Color(0xFFF48FB1)
+                        for (k in 0 until 5) {
+                            val a = k * 1.2566f
+                            drawCircle(col, radius = 3.2f, center = f + Offset(cos(a) * 3.5f, sin(a) * 3.5f))
+                        }
+                        drawCircle(Color(0xFFFFA000), radius = 2f, center = f)
+                    }
+                }
+            }
+            StageTheme.MOUNTAINS, StageTheme.ICE -> {
+                // snow piled along the top rail
+                val snow = Path().apply {
+                    moveTo(left - rail + 18f, top - rail + 2f)
+                    var x = left - rail + 18f
+                    var i = 0
+                    while (x < left + width + rail - 18f) {
+                        val nx = min(x + 28f, left + width + rail - 18f)
+                        quadraticTo((x + nx) / 2f, top - rail - 5f - (i % 3) * 2.5f, nx, top - rail + 2f)
+                        x = nx; i++
+                    }
+                    lineTo(left + width + rail - 18f, top - rail + 9f)
+                    lineTo(left - rail + 18f, top - rail + 9f)
+                    close()
+                }
+                drawPath(snow, Brush.verticalGradient(listOf(Color.White, Color(0xFFD6E9F5)), startY = top - rail - 8f, endY = top - rail + 9f))
+            }
+            else -> Unit
+        }
+    }
+
+    private fun drawLeaf(scope: DrawScope, base: Offset, angleDeg: Float, len: Float, a: Color, b: Color) = with(scope) {
+        rotate(angleDeg, pivot = base) {
+            val w = len * 0.32f
+            val p = Path().apply {
+                moveTo(base.x, base.y)
+                cubicTo(base.x + len * 0.3f, base.y - w, base.x + len * 0.8f, base.y - w * 0.8f, base.x + len, base.y)
+                cubicTo(base.x + len * 0.8f, base.y + w * 0.8f, base.x + len * 0.3f, base.y + w, base.x, base.y)
+                close()
+            }
+            // leaf shadow onto rail
+            translate(4f, 6f) { drawPath(p, Color.Black.copy(alpha = 0.25f)) }
+            drawPath(p, Brush.linearGradient(listOf(a.lighten(0.15f), b), start = Offset(base.x, base.y - w), end = Offset(base.x, base.y + w)))
+            drawLine(a.lighten(0.45f).copy(alpha = 0.7f), base, Offset(base.x + len * 0.92f, base.y), strokeWidth = 1.2f)
+        }
     }
 
     private fun drawThemedCorner(
@@ -339,34 +843,58 @@ object TableRenderer {
         colors: TableThemeColors
     ) {
         scope.rotate(rotationDeg, pivot = Offset(cornerX, cornerY)) {
-            val bracketPath = Path().apply {
-                moveTo(cornerX - 4f, cornerY - 4f)
-                lineTo(cornerX + 32f, cornerY - 4f)
-                lineTo(cornerX + 32f, cornerY + 10f)
-                lineTo(cornerX + 10f, cornerY + 10f)
-                lineTo(cornerX + 10f, cornerY + 32f)
-                lineTo(cornerX - 4f, cornerY + 32f)
+            val l = 46f
+            val th = 15f
+            val bracket = Path().apply {
+                moveTo(cornerX + 8f, cornerY)
+                lineTo(cornerX + l, cornerY)
+                lineTo(cornerX + l, cornerY + th)
+                lineTo(cornerX + th, cornerY + th)
+                lineTo(cornerX + th, cornerY + l)
+                lineTo(cornerX, cornerY + l)
+                lineTo(cornerX, cornerY + 8f)
+                quadraticTo(cornerX, cornerY, cornerX + 8f, cornerY)
                 close()
             }
+            translate(2.5f, 4f) { drawPath(bracket, Color.Black.copy(alpha = 0.4f)) }
             drawPath(
-                bracketPath,
+                bracket,
                 brush = Brush.linearGradient(
-                    colors = colors.cornerColors,
-                    start = Offset(cornerX - 4f, cornerY - 4f),
-                    end = Offset(cornerX + 30f, cornerY + 30f)
+                    colors = listOf(colors.cornerColors[0], colors.cornerColors[1], colors.cornerColors[2], colors.cornerColors[1]),
+                    start = Offset(cornerX, cornerY),
+                    end = Offset(cornerX + l, cornerY + l)
                 )
             )
-            // Rivet screw on corner bracket
-            drawCircle(
-                color = colors.rivetColor,
-                radius = 2.5f,
-                center = Offset(cornerX + 6f, cornerY + 6f)
-            )
-            drawCircle(
-                color = colors.rivetHighlight,
-                radius = 1f,
-                center = Offset(cornerX + 5.5f, cornerY + 5.5f)
-            )
+            drawPath(bracket, Color.White.copy(alpha = 0.35f), style = Stroke(1.2f))
+            drawPath(bracket, Color.Black.copy(alpha = 0.35f), style = Stroke(0.6f))
+            for (sc in listOf(Offset(cornerX + 7.5f, cornerY + 7.5f), Offset(cornerX + l - 8f, cornerY + 7.5f), Offset(cornerX + 7.5f, cornerY + l - 8f))) {
+                drawCircle(
+                    brush = Brush.radialGradient(
+                        listOf(colors.rivetHighlight, colors.cornerColors[1], colors.rivetColor),
+                        center = sc - Offset(1f, 1f), radius = 4.5f
+                    ),
+                    radius = 3.6f, center = sc
+                )
+                drawLine(colors.rivetColor, sc - Offset(2.2f, -2.2f), sc + Offset(2.2f, -2.2f), strokeWidth = 1f)
+            }
+        }
+    }
+
+    // =====================================================================
+    //  OBSTACLES
+    // =====================================================================
+
+    private fun rockPath(cx: Float, cy: Float, r: Float, seed: Int, verts: Int = 10): Path {
+        val rnd = java.util.Random(seed * 31L + 7L)
+        return Path().apply {
+            for (i in 0 until verts) {
+                val a = i * (2f * PI.toFloat() / verts) + rnd.nextFloat() * 0.25f
+                val rr = r * (0.84f + rnd.nextFloat() * 0.2f)
+                val x = cx + cos(a) * rr
+                val y = cy + sin(a) * rr
+                if (i == 0) moveTo(x, y) else lineTo(x, y)
+            }
+            close()
         }
     }
 
@@ -374,491 +902,373 @@ object TableRenderer {
         scope: DrawScope,
         obstacles: List<Obstacle>,
         boardCenter: Offset
-    ) {
+    ) = with(scope) {
+        val t = nowSeconds()
         for (obs in obstacles) {
             val cx = boardCenter.x + obs.pos.x
             val cy = boardCenter.y + obs.pos.y
+            val r = obs.radius
             when (obs.type) {
                 ObstacleType.ROCK -> {
-                    // Drop shadow
-                    scope.drawCircle(
-                        color = Color(0x60000000),
-                        radius = obs.radius * 1.15f,
-                        center = Offset(cx + 4f, cy + 5f)
+                    softOval(Offset(cx + SHADOW_DX, cy + SHADOW_DY), r * 1.35f, r * 1.05f, 0.55f)
+                    val body = rockPath(cx, cy, r, obs.id)
+                    drawPath(
+                        body,
+                        Brush.radialGradient(
+                            listOf(Color(0xFF9AA5B8), Color(0xFF66718A), Color(0xFF3C4559), Color(0xFF232937)),
+                            center = Offset(cx + LIGHT_X * r * 0.5f, cy + LIGHT_Y * r * 0.5f),
+                            radius = r * 1.5f
+                        )
                     )
-                    // 3D Rock texture
-                    scope.drawCircle(
-                        brush = Brush.radialGradient(
-                            colors = listOf(
-                                Color(0xFF8D99AE),
-                                Color(0xFF5C677D),
-                                Color(0xFF333D4F),
-                                Color(0xFF1E2530)
-                            ),
-                            center = Offset(cx - obs.radius * 0.35f, cy - obs.radius * 0.35f),
-                            radius = obs.radius * 1.25f
-                        ),
-                        radius = obs.radius,
-                        center = Offset(cx, cy)
-                    )
-                    // Rocky facet highlight
-                    scope.drawCircle(
-                        color = Color(0x40FFFFFF),
-                        radius = obs.radius * 0.45f,
-                        center = Offset(cx - obs.radius * 0.3f, cy - obs.radius * 0.3f)
-                    )
-                    scope.drawCircle(
-                        color = Color(0x35000000),
-                        radius = obs.radius,
-                        center = Offset(cx, cy),
-                        style = Stroke(width = 2.5f)
-                    )
+                    // top facet
+                    val facet = rockPath(cx + LIGHT_X * r * 0.22f, cy + LIGHT_Y * r * 0.22f, r * 0.55f, obs.id + 3, 7)
+                    drawPath(facet, Color.White.copy(alpha = 0.16f))
+                    drawPath(facet, Color.White.copy(alpha = 0.18f), style = Stroke(1f))
+                    // crack & moss speck
+                    drawLine(Color.Black.copy(alpha = 0.35f), Offset(cx + r * 0.15f, cy - r * 0.1f), Offset(cx + r * 0.55f, cy + r * 0.35f), strokeWidth = 1.5f)
+                    drawPath(body, Color.Black.copy(alpha = 0.45f), style = Stroke(1.6f))
                 }
                 ObstacleType.MOVING_BOULDER -> {
-                    // Rolling mountain boulder with grooves
-                    scope.drawCircle(
-                        color = Color(0x70000000),
-                        radius = obs.radius * 1.15f,
-                        center = Offset(cx + 5f, cy + 6f)
-                    )
-                    scope.drawCircle(
-                        brush = Brush.radialGradient(
-                            colors = listOf(
-                                Color(0xFFB0BEC5),
-                                Color(0xFF78909C),
-                                Color(0xFF455A64),
-                                Color(0xFF263238)
-                            ),
-                            center = Offset(cx - obs.radius * 0.35f, cy - obs.radius * 0.35f),
-                            radius = obs.radius * 1.2f
+                    softOval(Offset(cx + SHADOW_DX, cy + SHADOW_DY), r * 1.35f, r * 1.1f, 0.6f)
+                    drawCircle(
+                        Brush.radialGradient(
+                            listOf(Color(0xFFCFD8DC), Color(0xFF90A4AE), Color(0xFF546E7A), Color(0xFF263238)),
+                            center = Offset(cx + LIGHT_X * r * 0.45f, cy + LIGHT_Y * r * 0.45f),
+                            radius = r * 1.35f
                         ),
-                        radius = obs.radius,
-                        center = Offset(cx, cy)
+                        radius = r, center = Offset(cx, cy)
                     )
-                    // Rolling grooves / motion lines
-                    scope.drawArc(
-                        color = Color(0x50263238),
-                        startAngle = 30f,
-                        sweepAngle = 120f,
-                        useCenter = false,
-                        topLeft = Offset(cx - obs.radius * 0.65f, cy - obs.radius * 0.65f),
-                        size = Size(obs.radius * 1.3f, obs.radius * 1.3f),
-                        style = Stroke(width = 3.5f)
+                    // rolling bands rotate with travel position
+                    val roll = (if (obs.isHorizontal) obs.pos.x else obs.pos.y) / r * 57.3f
+                    rotate(roll, pivot = Offset(cx, cy)) {
+                        for (k in 0 until 3) {
+                            drawArc(
+                                Color(0x55263238), startAngle = k * 120f, sweepAngle = 70f, useCenter = false,
+                                topLeft = Offset(cx - r * 0.7f, cy - r * 0.7f), size = Size(r * 1.4f, r * 1.4f),
+                                style = Stroke(3f, cap = StrokeCap.Round)
+                            )
+                        }
+                    }
+                    // snow cap
+                    drawArc(
+                        Color.White.copy(alpha = 0.75f), startAngle = 200f, sweepAngle = 110f, useCenter = false,
+                        topLeft = Offset(cx - r * 0.82f, cy - r * 0.82f), size = Size(r * 1.64f, r * 1.64f),
+                        style = Stroke(r * 0.22f, cap = StrokeCap.Round)
                     )
-                    scope.drawArc(
-                        color = Color(0x50FFFFFF),
-                        startAngle = 210f,
-                        sweepAngle = 100f,
-                        useCenter = false,
-                        topLeft = Offset(cx - obs.radius * 0.7f, cy - obs.radius * 0.7f),
-                        size = Size(obs.radius * 1.4f, obs.radius * 1.4f),
-                        style = Stroke(width = 2.5f)
-                    )
+                    drawCircle(Color.Black.copy(alpha = 0.4f), radius = r, center = Offset(cx, cy), style = Stroke(1.5f))
                 }
                 ObstacleType.LAVA_HAZARD -> {
-                    // Volcanic Lava Danger Zone
-                    // Pulsing heat ring
-                    scope.drawCircle(
-                        brush = Brush.radialGradient(
-                            colors = listOf(
-                                Color(0xAAFF3D00),
-                                Color(0x55FF9100),
-                                Color(0x00000000)
-                            ),
-                            center = Offset(cx, cy),
-                            radius = obs.radius * 1.6f
-                        ),
-                        radius = obs.radius * 1.55f,
-                        center = Offset(cx, cy)
+                    val pulse = 0.85f + 0.15f * sin(t * 3f + obs.id)
+                    glow(Offset(cx, cy), r * 2.1f * pulse, Color(0x99FF3D00))
+                    val crust = rockPath(cx, cy, r * 1.22f, obs.id + 11, 12)
+                    drawPath(crust, Brush.radialGradient(listOf(Color(0xFF4E1A0A), Color(0xFF1A0703)), center = Offset(cx, cy), radius = r * 1.3f))
+                    drawPath(crust, Color(0xFFFF6D00).copy(alpha = 0.45f), style = Stroke(1.5f))
+                    val pool = rockPath(cx, cy, r * 0.98f, obs.id + 23, 11)
+                    drawPath(
+                        pool,
+                        Brush.radialGradient(
+                            listOf(Color(0xFFFFF59D), Color(0xFFFFC400), Color(0xFFFF6D00), Color(0xFFD50000)),
+                            center = Offset(cx + sin(t * 1.3f) * r * 0.12f, cy + cos(t * 1.1f) * r * 0.12f),
+                            radius = r * pulse
+                        )
                     )
-                    // Scorched crater rim
-                    scope.drawCircle(
-                        color = Color(0xFF260D05),
-                        radius = obs.radius * 1.15f,
-                        center = Offset(cx, cy)
-                    )
-                    // Molten magma base
-                    scope.drawCircle(
-                        brush = Brush.radialGradient(
-                            colors = listOf(
-                                Color(0xFFFFEA00), // hot yellow center
-                                Color(0xFFFF6D00), // orange
-                                Color(0xFFDD2C00), // red
-                                Color(0xFFB71C1C)  // deep crimson
-                            ),
-                            center = Offset(cx, cy),
-                            radius = obs.radius
-                        ),
-                        radius = obs.radius,
-                        center = Offset(cx, cy)
-                    )
-                    // Molten bubbles
-                    scope.drawCircle(
-                        color = Color(0x99FFF9C4),
-                        radius = obs.radius * 0.28f,
-                        center = Offset(cx - obs.radius * 0.25f, cy - obs.radius * 0.2f)
-                    )
-                    scope.drawCircle(
-                        color = Color(0x88FFAB00),
-                        radius = obs.radius * 0.22f,
-                        center = Offset(cx + obs.radius * 0.3f, cy + obs.radius * 0.22f)
-                    )
+                    // slowly drifting crust plates
+                    for (k in 0 until 3) {
+                        val a = t * 0.4f + k * 2.1f + obs.id
+                        val p = Offset(cx + cos(a) * r * 0.45f, cy + sin(a) * r * 0.4f)
+                        drawPath(rockPath(p.x, p.y, r * 0.2f, obs.id * 3 + k, 6), Color(0xCC5D1A08))
+                    }
+                    val bub = (t * 1.7f + obs.id) % 1f
+                    drawCircle(Color(0xFFFFF9C4).copy(alpha = 1f - bub), radius = r * 0.12f + bub * r * 0.18f, center = Offset(cx - r * 0.25f, cy + r * 0.1f), style = Stroke(1.5f))
                 }
                 ObstacleType.TEMPLE_PILLAR -> {
-                    // Ancient stone carved column / pillar
-                    scope.drawCircle(
-                        color = Color(0x75000000),
-                        radius = obs.radius * 1.2f,
-                        center = Offset(cx + 6f, cy + 8f)
+                    softOval(Offset(cx + SHADOW_DX * 1.6f, cy + SHADOW_DY * 1.6f), r * 1.5f, r * 1.25f, 0.6f)
+                    // square plinth
+                    val pl = r * 1.12f
+                    drawRect(
+                        Brush.linearGradient(listOf(Color(0xFF6D6577), Color(0xFF2E2836)), start = Offset(cx - pl, cy - pl), end = Offset(cx + pl, cy + pl)),
+                        topLeft = Offset(cx - pl, cy - pl), size = Size(pl * 2f, pl * 2f)
                     )
-                    // Column base
-                    scope.drawCircle(
-                        brush = Brush.radialGradient(
-                            colors = listOf(
-                                Color(0xFF9E9E9E),
-                                Color(0xFF616161),
-                                Color(0xFF424242),
-                                Color(0xFF212121)
-                            ),
-                            center = Offset(cx - obs.radius * 0.35f, cy - obs.radius * 0.35f),
-                            radius = obs.radius * 1.3f
+                    drawRect(Color.White.copy(alpha = 0.18f), topLeft = Offset(cx - pl, cy - pl), size = Size(pl * 2f, pl * 2f), style = Stroke(1.2f))
+                    // fluted column top
+                    drawCircle(
+                        Brush.radialGradient(
+                            listOf(Color(0xFFB8AFC2), Color(0xFF7A7085), Color(0xFF423A4C)),
+                            center = Offset(cx + LIGHT_X * r * 0.4f, cy + LIGHT_Y * r * 0.4f), radius = r * 1.2f
                         ),
-                        radius = obs.radius,
-                        center = Offset(cx, cy)
+                        radius = r * 0.92f, center = Offset(cx, cy)
                     )
-                    // Chiseled pillar rim
-                    scope.drawCircle(
-                        color = Color(0x40FFFFFF),
-                        radius = obs.radius - 2f,
-                        center = Offset(cx, cy),
-                        style = Stroke(width = 2.5f)
-                    )
-                    // Carved glowing rune inlay in pillar top
-                    scope.drawCircle(
-                        color = Color(0x80D500F9),
-                        radius = obs.radius * 0.55f,
-                        center = Offset(cx, cy),
-                        style = Stroke(width = 2f)
-                    )
-                    scope.drawCircle(
-                        color = Color(0xCCD500F9),
-                        radius = obs.radius * 0.22f,
-                        center = Offset(cx, cy)
-                    )
+                    for (k in 0 until 12) {
+                        val a = k * (PI.toFloat() / 6f)
+                        drawLine(
+                            Color.Black.copy(alpha = 0.22f),
+                            Offset(cx + cos(a) * r * 0.6f, cy + sin(a) * r * 0.6f),
+                            Offset(cx + cos(a) * r * 0.9f, cy + sin(a) * r * 0.9f),
+                            strokeWidth = 1.4f
+                        )
+                    }
+                    val rune = 0.6f + 0.4f * sin(t * 2f + obs.id)
+                    glow(Offset(cx, cy), r * 0.7f, Color(0xFFD500F9).copy(alpha = 0.5f * rune))
+                    drawCircle(Color(0xFFEA80FC).copy(alpha = rune), radius = r * 0.42f, center = Offset(cx, cy), style = Stroke(2f))
+                    drawPath(starPath(cx, cy, r * 0.3f, r * 0.12f, 3, t * 0.5f), Color(0xFFF3E5F5).copy(alpha = rune))
                 }
             }
         }
     }
+
+    // =====================================================================
+    //  ARMADILLO
+    // =====================================================================
+
+    private class ArmPalette(
+        val shellLight: Color, val shellMid: Color, val shellDark: Color, val groove: Color,
+        val skin: Color, val skinDark: Color, val ear: Color, val claw: Color, val aura: List<Color>
+    )
+
+    private val TAN = ArmPalette(
+        shellLight = Color(0xFFF2C38E), shellMid = Color(0xFFC4884E), shellDark = Color(0xFF6E3D19), groove = Color(0xFF3E1F0B),
+        skin = Color(0xFFE8B98A), skinDark = Color(0xFFA36A3C), ear = Color(0xFFE59A8C), claw = Color(0xFFF5E6C8),
+        aura = listOf(Color(0x00FFD54F), Color(0x6600E5FF), Color(0xAAFFD700), Color(0x00FFD700))
+    )
+    private val BLUE = ArmPalette(
+        shellLight = Color(0xFF90CAF9), shellMid = Color(0xFF1E88E5), shellDark = Color(0xFF0B3C7A), groove = Color(0xFF061D3D),
+        skin = Color(0xFF64B5F6), skinDark = Color(0xFF1565C0), ear = Color(0xFF80D8FF), claw = Color(0xFFE1F5FE),
+        aura = listOf(Color(0x0000B0FF), Color(0x6600E5FF), Color(0xAA40C4FF), Color(0x000091EA))
+    )
 
     fun drawArmadillo(
         scope: DrawScope,
         armadillo: ArmadilloState,
         boardCenter: Offset,
         isBlue: Boolean = false
-    ) {
+    ) = with(scope) {
         val cx = boardCenter.x + armadillo.pos.x
         val cy = boardCenter.y + armadillo.pos.y
         val scale = armadillo.eatenScale
-        if (scale <= 0.01f) return
+        if (scale <= 0.01f) return@with
 
+        val pal = if (isBlue) BLUE else TAN
         val heading = armadillo.headingAngle
         val headingDeg = (heading * 180f / PI).toFloat()
+        val ll = localLight(heading)
 
-        // Distinct 7araka Electric/Energy Aura around the Armadillo
+        // Power aura: soft energy field + orbiting sparks + shield pips
         if (armadillo.isPowerActive) {
-            val auraPulse = (sin(armadillo.auraPhase) * 4f).coerceIn(-4f, 4f)
-            val outerRadius = 42f + auraPulse
-            val innerRadius = 36f + auraPulse * 0.5f
-
-            // Radiant Cyan/Golden (or Neon Azure/Cyan for blue armadillo) energy ring
-            val auraColors = if (isBlue) {
-                listOf(
-                    Color(0x0000B0FF),
-                    Color(0x5000E5FF),
-                    Color(0xA040C4FF),
-                    Color(0x000091EA)
-                )
-            } else {
-                listOf(
-                    Color(0x0000E5FF),
-                    Color(0x5000E5FF),
-                    Color(0xA0FFD700),
-                    Color(0x00FFD700)
-                )
-            }
-
-            scope.drawCircle(
-                brush = Brush.radialGradient(
-                    colors = auraColors,
-                    center = Offset(cx, cy),
-                    radius = outerRadius + 8f
-                ),
-                radius = outerRadius + 8f,
-                center = Offset(cx, cy)
+            val pulse = sin(armadillo.auraPhase) * 4f
+            val outer = (46f + pulse) * scale
+            drawCircle(
+                Brush.radialGradient(pal.aura, center = Offset(cx, cy), radius = outer + 10f),
+                radius = outer + 10f, center = Offset(cx, cy)
             )
-
-            // Dynamic lightning/energy arcs around armadillo
-            for (arc in 0 until 4) {
-                val arcAngle = armadillo.auraPhase * 1.5f + (arc * (PI.toFloat() / 2f))
-                val arcX = cx + cos(arcAngle) * (innerRadius + 2f)
-                val arcY = cy + sin(arcAngle) * (innerRadius + 2f)
-                val arcColor = if (isBlue) {
-                    if (arc % 2 == 0) Color(0xFF00E5FF) else Color(0xFF80D8FF)
-                } else {
-                    if (arc % 2 == 0) Color(0xFF00E5FF) else Color(0xFFFFEA00)
-                }
-                scope.drawCircle(
-                    color = arcColor,
-                    radius = 3.5f,
-                    center = Offset(arcX, arcY)
+            rotate(armadillo.auraPhase * 40f, pivot = Offset(cx, cy)) {
+                drawCircle(
+                    pal.aura[2].copy(alpha = 0.8f), radius = outer - 4f, center = Offset(cx, cy),
+                    style = Stroke(2f, pathEffect = PathEffect.dashPathEffect(floatArrayOf(10f, 9f)))
                 )
             }
-
-            // Two Extra Chances shield indicators floating above the armadillo
+            for (arc in 0 until 4) {
+                val a = armadillo.auraPhase * 1.5f + arc * (PI.toFloat() / 2f)
+                val p = Offset(cx + cos(a) * (outer - 4f), cy + sin(a) * (outer - 4f))
+                sparkle(p, 6f, if (arc % 2 == 0) Color(0xFF00E5FF) else if (isBlue) Color(0xFF80D8FF) else Color(0xFFFFEA00))
+            }
             for (ch in 0 until armadillo.powerChancesRemaining) {
-                val shieldAngle = -PI.toFloat() / 2f + (ch - 0.5f) * 0.7f
-                val shieldX = cx + cos(shieldAngle) * 48f
-                val shieldY = cy + sin(shieldAngle) * 48f
-                scope.drawCircle(
-                    color = if (isBlue) Color(0xFF00E5FF) else Color(0xFF00E5FF),
-                    radius = 4.5f,
-                    center = Offset(shieldX, shieldY)
-                )
-                scope.drawCircle(
-                    color = Color.White,
-                    radius = 2f,
-                    center = Offset(shieldX, shieldY)
-                )
+                val a = -PI.toFloat() / 2f + (ch - 0.5f) * 0.7f
+                val p = Offset(cx + cos(a) * (outer + 6f), cy + sin(a) * (outer + 6f))
+                glow(p, 10f, Color(0x8800E5FF))
+                drawCircle(Color(0xFF00E5FF), radius = 4.5f, center = p)
+                drawCircle(Color.White, radius = 2f, center = p)
             }
         }
 
-        scope.withTransform({
+        // Ground shadow (screen-space offset, body-aligned)
+        withTransform({
+            translate(cx + SHADOW_DX * scale, cy + SHADOW_DY * scale)
+            rotate(headingDeg, pivot = Offset.Zero)
+            scale(scale, scale, pivot = Offset.Zero)
+        }) {
+            softOval(Offset(-2f, 0f), 40f, 28f, 0.55f)
+        }
+
+        withTransform({
             translate(left = cx, top = cy)
             scale(scaleX = scale, scaleY = scale, pivot = Offset.Zero)
             rotate(degrees = headingDeg, pivot = Offset.Zero)
         }) {
-            // 1. Soft Oval Drop Shadow on the Table
-            drawOval(
-                color = Color(0x60000000),
-                topLeft = Offset(-36f, -14f),
-                size = Size(64f, 40f)
-            )
-
-            // 2. Invulnerable Shield Aura (Grace period after spawn)
+            // spawn shield
             if (armadillo.invulnerableTimer > 0f) {
-                val auraAlpha = (sin(armadillo.invulnerableTimer * 12f) * 0.25f + 0.35f).coerceIn(0.1f, 0.7f)
-                val ringColor = if (isBlue) Color(0xFF00E5FF) else Color(0xFFFFD54F)
-                drawCircle(
-                    color = ringColor.copy(alpha = auraAlpha),
-                    radius = 38f,
-                    center = Offset.Zero,
-                    style = Stroke(width = 3f)
-                )
+                val a = (sin(armadillo.invulnerableTimer * 12f) * 0.25f + 0.4f).coerceIn(0.1f, 0.75f)
+                val ring = if (isBlue) Color(0xFF00E5FF) else Color(0xFFFFD54F)
+                glow(Offset.Zero, 48f, ring.copy(alpha = a * 0.35f))
+                drawCircle(ring.copy(alpha = a), radius = 40f, center = Offset.Zero, style = Stroke(2.5f))
             }
 
-            // 3. Four Paws (Animated scuttling)
-            val legOffset = sin(armadillo.legStepPhase) * 6f
-            val legColor = if (isBlue) Color(0xFF1565C0) else Color(0xFF7A451F)
-            val clawColor = if (isBlue) Color(0xFF80D8FF) else Color(0xFFD4AF37)
-
-            // Front Left Paw
-            drawRoundRect(
-                color = legColor,
-                topLeft = Offset(10f, -22f + legOffset),
-                size = Size(11f, 7f),
-                cornerRadius = CornerRadius(3f, 3f)
+            // legs + claws
+            val step = sin(armadillo.legStepPhase) * 6f
+            val legs = listOf(
+                Offset(14f, -21f + step), Offset(14f, 21f - step),
+                Offset(-17f, -22f - step), Offset(-17f, 22f + step)
             )
-            drawCircle(clawColor, radius = 1.5f, center = Offset(19f, -18.5f + legOffset))
-
-            // Front Right Paw
-            drawRoundRect(
-                color = legColor,
-                topLeft = Offset(10f, 15f - legOffset),
-                size = Size(11f, 7f),
-                cornerRadius = CornerRadius(3f, 3f)
-            )
-            drawCircle(clawColor, radius = 1.5f, center = Offset(19f, 18.5f - legOffset))
-
-            // Hind Left Paw
-            drawRoundRect(
-                color = legColor,
-                topLeft = Offset(-20f, -23f - legOffset),
-                size = Size(12f, 8f),
-                cornerRadius = CornerRadius(4f, 4f)
-            )
-            // Hind Right Paw
-            drawRoundRect(
-                color = legColor,
-                topLeft = Offset(-20f, 15f + legOffset),
-                size = Size(12f, 8f),
-                cornerRadius = CornerRadius(4f, 4f)
-            )
-
-            // 4. Tail with Segmented Rings (swaying behind)
-            val tailWag = sin(armadillo.tailWagPhase) * 4f
-            val tailPath = Path().apply {
-                moveTo(-22f, 0f)
-                quadraticTo(-32f, tailWag * 0.5f, -44f, tailWag)
-            }
-            val tailColor1 = if (isBlue) Color(0xFF1976D2) else Color(0xFF8D5524)
-            val tailColor2 = if (isBlue) Color(0xFF0D47A1) else Color(0xFF5E3013)
-            scope.drawPath(
-                tailPath,
-                color = tailColor1,
-                style = Stroke(width = 6f, cap = StrokeCap.Round)
-            )
-            scope.drawPath(
-                tailPath,
-                color = tailColor2,
-                style = Stroke(width = 2.5f, cap = StrokeCap.Round)
-            )
-
-            // 5. Main Rounded Armored Shell (3D Dome)
-            // Radial gradient creates spherical volume
-            val shellColors = if (isBlue) {
-                listOf(
-                    Color(0xFF64B5F6),
-                    Color(0xFF1E88E5),
-                    Color(0xFF1565C0),
-                    Color(0xFF0D47A1)
+            for ((i, lp) in legs.withIndex()) {
+                val side = if (lp.y < 0) -1f else 1f
+                drawOval(
+                    Brush.radialGradient(listOf(pal.skin, pal.skinDark), center = lp + Offset(ll.x * 2f, ll.y * 2f), radius = 9f),
+                    topLeft = lp - Offset(7f, 5f), size = Size(14f, 10f)
                 )
-            } else {
-                listOf(
-                    Color(0xFFE8B278),
-                    Color(0xFFC48248),
-                    Color(0xFF8E5325),
-                    Color(0xFF593012)
-                )
-            }
-
-            scope.drawOval(
-                brush = Brush.radialGradient(
-                    colors = shellColors,
-                    center = Offset(-4f, -4f),
-                    radius = 34f
-                ),
-                topLeft = Offset(-26f, -18f),
-                size = Size(46f, 36f)
-            )
-
-            // 6. Individual Transverse Shell Plates / Armor Bands
-            // Distinct armored bands with highlights and rivets
-            val bandOffsets = listOf(-16f, -8f, 0f, 8f)
-            val grooveColor = if (isBlue) Color(0xFF0A2440) else Color(0xFF42210B)
-            val plateHighlight = if (isBlue) Color(0xFFBBDEFB) else Color(0xFFFFD9B0)
-            val rivetColor = if (isBlue) Color(0xFFE1F5FE) else Color(0xFFFFF2DC)
-
-            for (bx in bandOffsets) {
-                // Curved transverse armor band
-                val bandPath = Path().apply {
-                    moveTo(bx, -17f)
-                    cubicTo(bx + 4f, -6f, bx + 4f, 6f, bx, 17f)
+                for (k in -1..1) {
+                    val tip = lp + Offset(7.5f + if (i < 2) 1f else 0f, k * 2.6f + side * 2.5f)
+                    drawLine(pal.claw, lp + Offset(4.5f, k * 2.2f + side * 2f), tip, strokeWidth = 1.4f, cap = StrokeCap.Round)
                 }
-                // Dark groove
-                scope.drawPath(
-                    bandPath,
-                    color = grooveColor,
-                    style = Stroke(width = 3.2f, cap = StrokeCap.Round)
-                )
-                // Highlight rim
-                scope.drawPath(
-                    bandPath,
-                    color = plateHighlight,
-                    style = Stroke(width = 1.4f, cap = StrokeCap.Round)
-                )
-
-                // Armored rivets / studs on plates
-                drawCircle(
-                    color = rivetColor,
-                    radius = 1.4f,
-                    center = Offset(bx + 1.5f, -8f)
-                )
-                drawCircle(
-                    color = rivetColor,
-                    radius = 1.4f,
-                    center = Offset(bx + 2f, 0f)
-                )
-                drawCircle(
-                    color = rivetColor,
-                    radius = 1.4f,
-                    center = Offset(bx + 1.5f, 8f)
-                )
             }
 
-            // Shell rim border
-            val rimColor = if (isBlue) Color(0xFF0D3768) else Color(0xFF4A250E)
-            scope.drawOval(
-                color = rimColor,
-                topLeft = Offset(-26f, -18f),
-                size = Size(46f, 36f),
-                style = Stroke(width = 2f)
-            )
+            // segmented tapering tail
+            val wag = sin(armadillo.tailWagPhase) * 5f
+            for (k in 0 until 7) {
+                val f = k / 6f
+                val tx = -26f - f * 22f
+                val ty = wag * f * f
+                val tr = 6f - f * 3.6f
+                drawCircle(
+                    Brush.radialGradient(listOf(pal.shellLight, pal.shellMid, pal.shellDark), center = Offset(tx + ll.x * tr * 0.5f, ty + ll.y * tr * 0.5f), radius = tr * 1.4f),
+                    radius = tr, center = Offset(tx, ty)
+                )
+                drawCircle(pal.groove.copy(alpha = 0.6f), radius = tr, center = Offset(tx, ty), style = Stroke(0.8f))
+            }
 
-            // 7. Cute Armadillo Head & Snout (Facing positive X)
-            val headCenter = Offset(24f, 0f)
-
-            // Head base
-            val headPath = Path().apply {
-                moveTo(14f, -9f)
-                lineTo(30f, -4f)
-                cubicTo(34f, -2f, 34f, 2f, 30f, 4f)
-                lineTo(14f, 9f)
+            // head (under the shell's front edge)
+            val head = Path().apply {
+                moveTo(14f, -11f)
+                cubicTo(24f, -12f, 33f, -6f, 40f, -2.5f)
+                cubicTo(43f, -1f, 43f, 1f, 40f, 2.5f)
+                cubicTo(33f, 6f, 24f, 12f, 14f, 11f)
                 close()
             }
-            val headColors = if (isBlue) {
-                listOf(Color(0xFF42A5F5), Color(0xFF1565C0))
-            } else {
-                listOf(Color(0xFFDCA168), Color(0xFFA86A34))
-            }
-            scope.drawPath(
-                headPath,
-                brush = Brush.linearGradient(
-                    colors = headColors,
-                    start = Offset(14f, 0f),
-                    end = Offset(34f, 0f)
+            drawPath(
+                head,
+                Brush.radialGradient(
+                    listOf(pal.skin.lighten(0.2f), pal.skin, pal.skinDark),
+                    center = Offset(24f + ll.x * 6f, ll.y * 6f), radius = 22f
                 )
             )
+            drawPath(head, pal.skinDark.darken(0.3f).copy(alpha = 0.6f), style = Stroke(1f))
+            // armored head cap
+            val cap = Path().apply {
+                moveTo(17f, -7f)
+                quadraticTo(27f, -6f, 32f, -2f)
+                lineTo(32f, 2f)
+                quadraticTo(27f, 6f, 17f, 7f)
+                close()
+            }
+            drawPath(cap, Brush.linearGradient(listOf(pal.shellLight, pal.shellMid), start = Offset(17f, -7f), end = Offset(32f, 7f)))
+            drawPath(cap, pal.groove.copy(alpha = 0.5f), style = Stroke(0.8f))
+            // ears
+            for (s in listOf(-1f, 1f)) {
+                val ear = Path().apply {
+                    moveTo(17f, s * 8f)
+                    quadraticTo(14f, s * 19f, 21f, s * 17f)
+                    quadraticTo(23f, s * 12f, 22f, s * 8.5f)
+                    close()
+                }
+                drawPath(ear, pal.skinDark)
+                drawPath(ear, pal.ear.copy(alpha = 0.8f), style = Stroke(1.2f))
+            }
+            // eyes
+            for (s in listOf(-1f, 1f)) {
+                val e = Offset(27f, s * 6.2f)
+                drawCircle(Color(0xFF120A06), radius = 3.1f, center = e)
+                drawCircle(Color.White, radius = 1.15f, center = e + Offset(0.9f, -0.9f))
+                drawCircle(Color.White.copy(alpha = 0.5f), radius = 0.6f, center = e + Offset(-1f, 1f))
+            }
+            // nose
+            drawOval(Color(0xFF2B1408), topLeft = Offset(39f, -2.6f), size = Size(4.5f, 5.2f))
+            drawCircle(Color.White.copy(alpha = 0.4f), radius = 0.8f, center = Offset(40.5f, -1.2f))
 
-            // Snout / Nose
-            val noseColor = if (isBlue) Color(0xFF0A192F) else Color(0xFF2B1408)
-            drawCircle(
-                color = noseColor,
-                radius = 2.8f,
-                center = Offset(32.5f, 0f)
+            // ===== the shell =====
+            val shellRect = androidx.compose.ui.geometry.Rect(-30f, -23f, 24f, 23f)
+            val shell = Path().apply { addOval(shellRect) }
+            // rim shadow so the shell sits above the legs
+            drawOval(Color.Black.copy(alpha = 0.35f), topLeft = shellRect.topLeft + Offset(1f, 2f), size = Size(shellRect.width + 1f, shellRect.height + 1f))
+            clipPath(shell) {
+                // base dome
+                drawRect(
+                    Brush.radialGradient(
+                        listOf(pal.shellLight, pal.shellMid, pal.shellDark),
+                        center = Offset(-3f + ll.x * 14f, ll.y * 14f), radius = 40f
+                    ),
+                    topLeft = shellRect.topLeft, size = shellRect.size
+                )
+                // transverse bands (each band is its own little cylinder)
+                val bandCount = 7
+                val bx0 = -22f
+                val bw = 5.6f
+                for (b in 0 until bandCount) {
+                    val x = bx0 + b * bw
+                    drawRect(
+                        Brush.horizontalGradient(
+                            listOf(Color.Black.copy(alpha = 0.22f), Color.White.copy(alpha = 0.12f), Color.Black.copy(alpha = 0.06f)),
+                            startX = x, endX = x + bw
+                        ),
+                        topLeft = Offset(x, shellRect.top), size = Size(bw, shellRect.height)
+                    )
+                    val groove = Path().apply {
+                        moveTo(x, shellRect.top)
+                        cubicTo(x + 3f, -8f, x + 3f, 8f, x, shellRect.bottom)
+                    }
+                    drawPath(groove, pal.groove.copy(alpha = 0.85f), style = Stroke(1.6f))
+                    // scute studs
+                    for (sy in -3..3) {
+                        val py = sy * 5.6f
+                        drawCircle(pal.shellLight.lighten(0.3f).copy(alpha = 0.55f - abs(sy) * 0.06f), radius = 1.05f, center = Offset(x + bw * 0.55f + 1.2f, py))
+                    }
+                }
+                // front and rear shields: fine hex scutes
+                for (side in listOf(-1, 1)) {
+                    val sx = if (side < 0) -27f else 19f
+                    for (row in -3..3) for (col in 0..1) {
+                        val p = Offset(sx + col * 4.2f * (if (side < 0) 1f else -1f) * -1f + (row % 2) * 1.8f, row * 5f)
+                        drawCircle(pal.groove.copy(alpha = 0.35f), radius = 2.2f, center = p, style = Stroke(0.7f))
+                    }
+                }
+                // dome ambient occlusion toward the rim
+                drawRect(
+                    Brush.radialGradient(
+                        0f to Color.Transparent, 0.62f to Color.Transparent, 1f to Color.Black.copy(alpha = 0.5f),
+                        center = Offset(-3f, 0f), radius = 30f
+                    ),
+                    topLeft = shellRect.topLeft, size = shellRect.size
+                )
+                // specular
+                withTransform({ scale(1.6f, 1f, pivot = Offset(-3f + ll.x * 11f, ll.y * 11f)) }) {
+                    glow(Offset(-3f + ll.x * 11f, ll.y * 11f), 9f, Color.White.copy(alpha = 0.55f))
+                }
+            }
+            drawOval(pal.groove, topLeft = shellRect.topLeft, size = shellRect.size, style = Stroke(1.8f))
+            // skirt highlight on lit side
+            drawArc(
+                Color.White.copy(alpha = 0.35f),
+                startAngle = (atan2(ll.y, ll.x) * 57.3f) - 45f, sweepAngle = 90f, useCenter = false,
+                topLeft = shellRect.topLeft + Offset(1.5f, 1.5f), size = Size(shellRect.width - 3f, shellRect.height - 3f),
+                style = Stroke(1.6f, cap = StrokeCap.Round)
             )
-
-            // Cute Triangular Ears
-            val earColor = if (isBlue) Color(0xFF1E88E5) else Color(0xFFC48248)
-            val innerEarColor = if (isBlue) Color(0xFF80D8FF) else Color(0xFFE89A8A)
-
-            val leftEarPath = Path().apply {
-                moveTo(16f, -7f)
-                lineTo(20f, -16f)
-                lineTo(22f, -8f)
-                close()
-            }
-            scope.drawPath(leftEarPath, color = earColor)
-            scope.drawPath(leftEarPath, color = innerEarColor, style = Stroke(width = 1f))
-
-            val rightEarPath = Path().apply {
-                moveTo(16f, 7f)
-                lineTo(20f, 16f)
-                lineTo(22f, 8f)
-                close()
-            }
-            scope.drawPath(rightEarPath, color = earColor)
-            scope.drawPath(rightEarPath, color = innerEarColor, style = Stroke(width = 1f))
-
-            // Big expressive eyes
-            // Left Eye
-            drawCircle(color = Color(0xFF0A192F), radius = 3.2f, center = Offset(23f, -5f))
-            drawCircle(color = Color(0xFFFFFFFF), radius = 1.1f, center = Offset(24f, -5.8f))
-
-            // Right Eye
-            drawCircle(color = Color(0xFF0A192F), radius = 3.2f, center = Offset(23f, 5f))
-            drawCircle(color = Color(0xFFFFFFFF), radius = 1.1f, center = Offset(24f, 4.2f))
         }
     }
+
+    // =====================================================================
+    //  SNAKES
+    // =====================================================================
+
+    private class SnakePalette(
+        val light: Color, val mid: Color, val dark: Color, val outline: Color,
+        val pattern: Color, val patternEdge: Color, val belly: Color, val eye: Color
+    )
+
+    private val GREEN_SNAKE = SnakePalette(
+        light = Color(0xFF9CCC65), mid = Color(0xFF43A047), dark = Color(0xFF1B5E20), outline = Color(0xFF0A2E0D),
+        pattern = Color(0xFF1B3A12), patternEdge = Color(0xFFFFD54F), belly = Color(0xFFE6EE9C), eye = Color(0xFFFFD54F)
+    )
+    private val PURPLE_SNAKE = SnakePalette(
+        light = Color(0xFFE1A8F0), mid = Color(0xFF9C27B0), dark = Color(0xFF4A148C), outline = Color(0xFF1C0533),
+        pattern = Color(0xFF2A0845), patternEdge = Color(0xFFFF80AB), belly = Color(0xFFF8BBD0), eye = Color(0xFFFF1F8E)
+    )
 
     fun drawSnakes(
         scope: DrawScope,
@@ -875,413 +1285,345 @@ object TableRenderer {
         snake: SnakeState,
         boardCenter: Offset,
         snakeIndex: Int = 0
-    ) {
+    ) = with(scope) {
+        val pal = if (snakeIndex % 2 == 1) PURPLE_SNAKE else GREEN_SNAKE
         val headX = boardCenter.x + snake.headPos.x
         val headY = boardCenter.y + snake.headPos.y
 
-        val bodyColors = if (snakeIndex == 1) {
-            listOf(Color(0xFFBA68C8), Color(0xFF8E24AA), Color(0xFF4A148C), Color(0xFF1E0738))
-        } else {
-            listOf(Color(0xFF4CAF50), Color(0xFF2E7D32), Color(0xFF1B5E20), Color(0xFF0C3810))
-        }
-        val bellyHighlight = if (snakeIndex == 1) Color(0x40E1BEE7) else Color(0x35A5D6A7)
-        val headColors = if (snakeIndex == 1) {
-            listOf(Color(0xFFCE93D8), Color(0xFF9C27B0), Color(0xFF4A148C), Color(0xFF1B0530))
-        } else {
-            listOf(Color(0xFF66BB6A), Color(0xFF388E3C), Color(0xFF1B5E20), Color(0xFF0E3812))
-        }
-        val headContour = if (snakeIndex == 1) Color(0xFFE1BEE7).copy(alpha = 0.5f) else Color(0xFF81C784).copy(alpha = 0.4f)
-        val eyeColor = if (snakeIndex == 1) Color(0xFFFF007F) else Color(0xFFFFD54F)
-
-        // 1. Soft Drop Shadow for segments & head
-        for (i in snake.bodySegments.indices) {
-            val seg = snake.bodySegments[i]
-            val segScreen = Offset(boardCenter.x + seg.x + 5f, boardCenter.y + seg.y + 6f)
-            val radius = 15f - (i * 0.65f).coerceAtMost(9f)
-            scope.drawCircle(
-                color = Color(0x40000000),
-                radius = radius * 1.05f,
-                center = segScreen
-            )
-        }
-        scope.drawCircle(
-            color = Color(0x40000000),
-            radius = 18f,
-            center = Offset(headX + 6f, headY + 7f)
-        )
-
-        // 2. Snake Body Segments (drawn tail to head for proper z-overlap)
+        // 1. Spine: head + segments with the slither wave applied
         val segCount = snake.bodySegments.size
-        for (i in (segCount - 1) downTo 0) {
+        val spine = ArrayList<Offset>(segCount + 1)
+        val radii = ArrayList<Float>(segCount + 1)
+        spine += Offset(headX, headY)
+        radii += 14f
+        for (i in 0 until segCount) {
             val seg = snake.bodySegments[i]
-            val segRadius = 15f - (i * 0.65f).coerceAtMost(9f)
-
-            // Slither wave offset perpendicular to motion
             val wave = sin(snake.slitherPhase + i * 0.45f) * (6f * (1f - i.toFloat() / segCount))
-            val angle = if (i == 0) snake.headAngle else {
-                val prev = snake.bodySegments[i - 1]
-                kotlin.math.atan2(prev.y - seg.y, prev.x - seg.x)
+            val prev = if (i == 0) snake.headPos else snake.bodySegments[i - 1]
+            val angle = atan2(prev.y - seg.y, prev.x - seg.x)
+            val perp = angle + (PI / 2).toFloat()
+            spine += Offset(boardCenter.x + seg.x + cos(perp) * wave, boardCenter.y + seg.y + sin(perp) * wave)
+            val f = i.toFloat() / max(1, segCount - 1)
+            radii += 14.5f - 9f * f * f - 1.5f * f
+        }
+
+        // 2. Densify so the body reads as one smooth tube
+        val pts = ArrayList<Offset>()
+        val rs = ArrayList<Float>()
+        for (i in 0 until spine.size - 1) {
+            val a = spine[i]
+            val b = spine[i + 1]
+            val d = (b - a).getDistance()
+            val n = max(1, (d / max(2.5f, radii[i] * 0.35f)).toInt())
+            for (k in 0 until n) {
+                val f = k / n.toFloat()
+                pts += Offset(a.x + (b.x - a.x) * f, a.y + (b.y - a.y) * f)
+                rs += radii[i] + (radii[i + 1] - radii[i]) * f
             }
-            val perpAngle = angle + (PI / 2).toFloat()
-            val offsetX = cos(perpAngle) * wave
-            val offsetY = sin(perpAngle) * wave
+        }
+        pts += spine.last(); rs += radii.last()
 
-            val sx = boardCenter.x + seg.x + offsetX
-            val sy = boardCenter.y + seg.y + offsetY
+        // 3. Uniform soft shadow (drawn into an offscreen layer so overlaps don't stack)
+        var minX = Float.MAX_VALUE; var minY = Float.MAX_VALUE; var maxX = -Float.MAX_VALUE; var maxY = -Float.MAX_VALUE
+        for (p in pts) { minX = min(minX, p.x); minY = min(minY, p.y); maxX = max(maxX, p.x); maxY = max(maxY, p.y) }
+        val bounds = androidx.compose.ui.geometry.Rect(minX - 40f, minY - 40f, maxX + 50f, maxY + 50f)
+        drawIntoCanvas { canvas ->
+            canvas.saveLayer(bounds, Paint().apply { alpha = 0.30f })
+            for (i in pts.indices) drawCircle(Color.Black, radius = rs[i] * 1.12f, center = pts[i] + Offset(SHADOW_DX + 1f, SHADOW_DY + 1f))
+            drawCircle(Color.Black, radius = 18f, center = Offset(headX + SHADOW_DX + 2f, headY + SHADOW_DY + 2f))
+            canvas.restore()
+        }
 
-            // 3D Spherical Snake Scale Segment
-            scope.drawCircle(
-                brush = Brush.radialGradient(
-                    colors = bodyColors,
-                    center = Offset(sx - 3f, sy - 3f),
-                    radius = segRadius * 1.3f
+        // 4. Outline + body (tail to head)
+        for (i in pts.indices.reversed()) drawCircle(pal.outline, radius = rs[i] + 1.6f, center = pts[i])
+        val hl = Offset(LIGHT_X, LIGHT_Y)
+        for (i in pts.indices.reversed()) {
+            val r = rs[i]
+            drawCircle(
+                Brush.radialGradient(
+                    0f to pal.light,
+                    0.45f to pal.mid,
+                    1f to pal.dark,
+                    center = pts[i] + hl * (r * 0.45f),
+                    radius = r * 1.45f
                 ),
-                radius = segRadius,
-                center = Offset(sx, sy)
-            )
-
-            // Dorsal Diamond Scale Pattern
-            if (i % 2 == 0) {
-                drawDiamondScale(scope, sx, sy, segRadius * 0.55f, angle)
-            }
-
-            // Pale Belly Edge highlight
-            scope.drawCircle(
-                color = bellyHighlight,
-                radius = segRadius,
-                center = Offset(sx, sy),
-                style = Stroke(width = 1.2f)
+                radius = r, center = pts[i]
             )
         }
 
-        // 3. Snake Head
+        // 5. Dorsal saddle pattern + scale texture + glossy highlight
+        for (i in 1 until spine.size - 1) {
+            val p = spine[i]
+            val dir = spine[i - 1] - spine[i + 1]
+            val ang = atan2(dir.y, dir.x)
+            val r = radii[i]
+            if (i % 2 == 1) {
+                withTransform({ rotate(ang * 57.3f, pivot = p) }) {
+                    val d = Path().apply {
+                        moveTo(p.x - r * 0.85f, p.y)
+                        lineTo(p.x, p.y - r * 0.62f)
+                        lineTo(p.x + r * 0.85f, p.y)
+                        lineTo(p.x, p.y + r * 0.62f)
+                        close()
+                    }
+                    drawPath(d, pal.pattern.copy(alpha = 0.85f))
+                    drawPath(d, pal.patternEdge.copy(alpha = 0.75f), style = Stroke(1.3f))
+                    drawCircle(pal.patternEdge.copy(alpha = 0.6f), radius = r * 0.14f, center = p)
+                }
+            } else {
+                // flank scale ticks
+                val perp = ang + PI.toFloat() / 2f
+                for (s in listOf(-1f, 1f)) {
+                    val q = p + Offset(cos(perp), sin(perp)) * (r * 0.62f * s)
+                    drawCircle(pal.dark.copy(alpha = 0.5f), radius = r * 0.16f, center = q)
+                }
+            }
+        }
+        for (i in pts.indices step 2) {
+            val r = rs[i]
+            drawCircle(Color.White.copy(alpha = 0.10f), radius = r * 0.32f, center = pts[i] + hl * (r * 0.5f))
+        }
+
+        // 6. Head
         val headAngleDeg = (snake.headAngle * 180f / PI).toFloat()
-        scope.withTransform({
+        val hll = localLight(snake.headAngle)
+        withTransform({
             translate(left = headX, top = headY)
             rotate(degrees = headAngleDeg, pivot = Offset.Zero)
         }) {
-            // Flickering Red Forked Tongue
             if (snake.tongueVisible) {
-                val tongueLen = 22f
-                val tonguePath = Path().apply {
-                    moveTo(18f, 0f)
-                    lineTo(18f + tongueLen, 0f)
-                    // Fork
-                    moveTo(18f + tongueLen, 0f)
-                    lineTo(18f + tongueLen + 6f, -4f)
-                    moveTo(18f + tongueLen, 0f)
-                    lineTo(18f + tongueLen + 6f, 4f)
+                val flick = sin(snake.tongueFlickTimer * 40f) * 2f
+                val tl = 20f
+                val tongue = Path().apply {
+                    moveTo(22f, 0f)
+                    quadraticTo(22f + tl * 0.5f, flick, 22f + tl, 0f)
+                    moveTo(22f + tl, 0f); lineTo(22f + tl + 6f, -4f + flick)
+                    moveTo(22f + tl, 0f); lineTo(22f + tl + 6f, 4f + flick)
                 }
-                scope.drawPath(
-                    tonguePath,
-                    color = Color(0xFFE53935),
-                    style = Stroke(width = 2.2f, cap = StrokeCap.Round)
-                )
+                drawPath(tongue, Color(0xFF7F0000), style = Stroke(3.2f, cap = StrokeCap.Round))
+                drawPath(tongue, Color(0xFFFF5252), style = Stroke(1.8f, cap = StrokeCap.Round))
             }
 
-            // Head base (Diamond-shaped predatory viper head)
-            val headPath = Path().apply {
-                moveTo(-12f, -12f)
-                lineTo(6f, -14f)
-                lineTo(22f, -4f)
-                cubicTo(26f, -2f, 26f, 2f, 22f, 4f)
-                lineTo(6f, 14f)
-                lineTo(-12f, 12f)
+            val head = Path().apply {
+                moveTo(-10f, -12f)
+                cubicTo(-2f, -17f, 10f, -16f, 18f, -9f)
+                cubicTo(24f, -5f, 26f, -2f, 26f, 0f)
+                cubicTo(26f, 2f, 24f, 5f, 18f, 9f)
+                cubicTo(10f, 16f, -2f, 17f, -10f, 12f)
+                cubicTo(-14f, 6f, -14f, -6f, -10f, -12f)
                 close()
             }
-            scope.drawPath(
-                headPath,
-                brush = Brush.radialGradient(
-                    colors = headColors,
-                    center = Offset(4f, -2f),
-                    radius = 24f
+            drawPath(head, pal.outline, style = Stroke(3.2f))
+            drawPath(
+                head,
+                Brush.radialGradient(
+                    0f to pal.light, 0.5f to pal.mid, 1f to pal.dark,
+                    center = Offset(6f + hll.x * 8f, hll.y * 8f), radius = 26f
                 )
             )
-
-            // Head scale contours
-            scope.drawPath(
-                headPath,
-                color = headContour,
-                style = Stroke(width = 1.8f)
-            )
-
-            // Crown Dorsal Diamond
-            drawDiamondScale(scope, 2f, 0f, 7f, 0f)
-
-            // Nostrils
-            val nostrilColor = if (snakeIndex == 1) Color(0xFF1E0738) else Color(0xFF0D3310)
-            drawCircle(nostrilColor, radius = 1.2f, center = Offset(19f, -2f))
-            drawCircle(nostrilColor, radius = 1.2f, center = Offset(19f, 2f))
-
-            // Sinister Predatory Eyes (amber-yellow or electric magenta with black slit)
-            // Left Eye
-            drawOval(
-                color = eyeColor,
-                topLeft = Offset(7f, -12f),
-                size = Size(8f, 5f)
-            )
-            drawLine(
-                color = Color(0xFF1B0000),
-                start = Offset(11f, -12f),
-                end = Offset(11f, -7f),
-                strokeWidth = 1.8f
-            )
-
-            // Right Eye
-            drawOval(
-                color = eyeColor,
-                topLeft = Offset(7f, 7f),
-                size = Size(8f, 5f)
-            )
-            drawLine(
-                color = Color(0xFF1B0000),
-                start = Offset(11f, 7f),
-                end = Offset(11f, 12f),
-                strokeWidth = 1.8f
-            )
-
-            // Strike fangs flash if striking
+            // crown plates
+            val crown = Path().apply {
+                moveTo(-4f, -7f); lineTo(12f, -5f); lineTo(16f, 0f); lineTo(12f, 5f); lineTo(-4f, 7f); lineTo(-1f, 0f); close()
+            }
+            drawPath(crown, pal.pattern.copy(alpha = 0.7f))
+            drawPath(crown, pal.patternEdge.copy(alpha = 0.6f), style = Stroke(1.1f))
+            // brow ridges
+            for (s in listOf(-1f, 1f)) {
+                drawLine(pal.dark.darken(0.3f), Offset(6f, s * 12.5f), Offset(17f, s * 8.5f), strokeWidth = 2.2f, cap = StrokeCap.Round)
+            }
+            // glossy head highlight
+            withTransform({ scale(1.7f, 1f, pivot = Offset(4f + hll.x * 7f, hll.y * 7f)) }) {
+                glow(Offset(4f + hll.x * 7f, hll.y * 7f), 7f, Color.White.copy(alpha = 0.35f))
+            }
+            // nostrils
+            drawCircle(pal.outline, radius = 1.3f, center = Offset(22.5f, -2.5f))
+            drawCircle(pal.outline, radius = 1.3f, center = Offset(22.5f, 2.5f))
+            // eyes with glow + slit
+            for (s in listOf(-1f, 1f)) {
+                val e = Offset(12f, s * 9.5f)
+                glow(e, 9f, pal.eye.copy(alpha = if (snake.isStriking) 0.7f else 0.35f))
+                drawOval(pal.outline, topLeft = e - Offset(4.8f, 3.4f), size = Size(9.6f, 6.8f))
+                drawOval(
+                    Brush.radialGradient(listOf(pal.eye.lighten(0.4f), pal.eye, pal.eye.darken(0.4f)), center = e - Offset(1f, 1f), radius = 4.5f),
+                    topLeft = e - Offset(4f, 2.7f), size = Size(8f, 5.4f)
+                )
+                drawLine(Color(0xFF120000), e - Offset(0f, 2.6f), e + Offset(0f, 2.6f), strokeWidth = 1.6f, cap = StrokeCap.Round)
+                drawCircle(Color.White.copy(alpha = 0.8f), radius = 0.9f, center = e + Offset(-1.6f, -1f))
+            }
             if (snake.isStriking) {
-                val fangPath = Path().apply {
-                    moveTo(20f, -4f)
-                    lineTo(25f, -2f)
-                    lineTo(20f, 0f)
-                    lineTo(25f, 2f)
-                    lineTo(20f, 4f)
+                for (s in listOf(-1f, 1f)) {
+                    val fang = Path().apply { moveTo(20f, s * 3.5f); lineTo(28f, s * 2.2f); lineTo(21f, s * 1.2f); close() }
+                    drawPath(fang, Color.White)
+                    drawPath(fang, Color(0x55000000), style = Stroke(0.6f))
                 }
-                scope.drawPath(
-                    fangPath,
-                    color = Color(0xFFFFFFFF),
-                    style = Stroke(width = 2f, cap = StrokeCap.Round)
-                )
             }
         }
     }
 
-    private fun drawDiamondScale(scope: DrawScope, cx: Float, cy: Float, size: Float, angleRad: Float) {
-        val deg = (angleRad * 180f / PI).toFloat()
-        scope.withTransform({
-            translate(left = cx, top = cy)
-            rotate(degrees = deg, pivot = Offset.Zero)
-        }) {
-            val dPath = Path().apply {
-                moveTo(-size, 0f)
-                lineTo(0f, -size * 0.7f)
-                lineTo(size, 0f)
-                lineTo(0f, size * 0.7f)
-                close()
-            }
-            drawPath(dPath, color = Color(0xFFFFD54F).copy(alpha = 0.85f), style = Fill)
-            drawPath(dPath, color = Color(0xFF795548).copy(alpha = 0.5f), style = Stroke(width = 1f))
+    // =====================================================================
+    //  FRUIT
+    // =====================================================================
+
+    private fun applePath(cx: Float, cy: Float, r: Float): Path = Path().apply {
+        moveTo(cx, cy - r * 0.72f)
+        cubicTo(cx + r * 0.45f, cy - r * 1.12f, cx + r * 1.12f, cy - r * 0.8f, cx + r * 1.02f, cy - r * 0.05f)
+        cubicTo(cx + r * 0.98f, cy + r * 0.65f, cx + r * 0.5f, cy + r * 1.02f, cx + r * 0.18f, cy + r * 0.95f)
+        quadraticTo(cx, cy + r * 0.88f, cx - r * 0.18f, cy + r * 0.95f)
+        cubicTo(cx - r * 0.5f, cy + r * 1.02f, cx - r * 0.98f, cy + r * 0.65f, cx - r * 1.02f, cy - r * 0.05f)
+        cubicTo(cx - r * 1.12f, cy - r * 0.8f, cx - r * 0.45f, cy - r * 1.12f, cx, cy - r * 0.72f)
+        close()
+    }
+
+    private fun DrawScope.shinyFruitBody(
+        cx: Float, cy: Float, r: Float,
+        light: Color, mid: Color, dark: Color, rim: Color
+    ) {
+        val body = applePath(cx, cy, r)
+        drawPath(body, dark.darken(0.45f), style = Stroke(2.2f))
+        drawPath(
+            body,
+            Brush.radialGradient(
+                0f to light, 0.35f to mid, 0.85f to dark, 1f to dark.darken(0.25f),
+                center = Offset(cx + LIGHT_X * r * 0.45f, cy + LIGHT_Y * r * 0.35f),
+                radius = r * 1.5f
+            )
+        )
+        // reflected rim light from the table (bottom-right)
+        clipPath(body) {
+            drawCircle(
+                Brush.radialGradient(
+                    0f to Color.Transparent, 0.75f to Color.Transparent, 1f to rim,
+                    center = Offset(cx - r * 0.25f, cy - r * 0.3f), radius = r * 1.32f
+                ),
+                radius = r * 1.4f, center = Offset(cx, cy)
+            )
         }
+        // top dimple
+        drawOval(
+            Brush.radialGradient(listOf(dark.darken(0.5f).copy(alpha = 0.8f), Color.Transparent), center = Offset(cx, cy - r * 0.68f), radius = r * 0.35f),
+            topLeft = Offset(cx - r * 0.35f, cy - r * 0.85f), size = Size(r * 0.7f, r * 0.34f)
+        )
+        // specular: soft lobe + crisp dot
+        withTransform({ rotate(-30f, pivot = Offset(cx - r * 0.42f, cy - r * 0.32f)) }) {
+            drawOval(
+                Brush.radialGradient(listOf(Color.White.copy(alpha = 0.75f), Color.Transparent), center = Offset(cx - r * 0.42f, cy - r * 0.32f), radius = r * 0.36f),
+                topLeft = Offset(cx - r * 0.42f - r * 0.36f, cy - r * 0.32f - r * 0.2f), size = Size(r * 0.72f, r * 0.4f)
+            )
+        }
+        drawCircle(Color.White.copy(alpha = 0.95f), radius = r * 0.09f, center = Offset(cx - r * 0.5f, cy - r * 0.38f))
+    }
+
+    private fun DrawScope.stemAndLeaf(cx: Float, cy: Float, r: Float, stem: Color, leafA: Color, leafB: Color) {
+        val stemPath = Path().apply {
+            moveTo(cx, cy - r * 0.7f)
+            quadraticTo(cx - r * 0.06f, cy - r * 1.1f, cx - r * 0.28f, cy - r * 1.45f)
+        }
+        drawPath(stemPath, stem.darken(0.4f), style = Stroke(r * 0.2f, cap = StrokeCap.Round))
+        drawPath(stemPath, stem, style = Stroke(r * 0.11f, cap = StrokeCap.Round))
+        val lb = Offset(cx - r * 0.06f, cy - r * 1.08f)
+        val leaf = Path().apply {
+            moveTo(lb.x, lb.y)
+            cubicTo(lb.x + r * 0.3f, lb.y - r * 0.55f, lb.x + r * 0.85f, lb.y - r * 0.5f, lb.x + r * 1.0f, lb.y - r * 0.2f)
+            cubicTo(lb.x + r * 0.75f, lb.y + r * 0.12f, lb.x + r * 0.3f, lb.y + r * 0.15f, lb.x, lb.y)
+            close()
+        }
+        drawPath(leaf, Brush.linearGradient(listOf(leafA, leafB), start = Offset(lb.x, lb.y - r * 0.5f), end = Offset(lb.x + r, lb.y + r * 0.1f)))
+        drawPath(leaf, leafB.darken(0.35f), style = Stroke(0.9f))
+        drawLine(leafA.lighten(0.5f).copy(alpha = 0.8f), lb, Offset(lb.x + r * 0.85f, lb.y - r * 0.22f), strokeWidth = 0.9f)
     }
 
     fun drawApples(
         scope: DrawScope,
         apples: List<AppleItem>,
         boardCenter: Offset
-    ) {
+    ) = with(scope) {
         for (apple in apples) {
             val ax = boardCenter.x + apple.pos.x
             val ay = boardCenter.y + apple.pos.y
             val bob = if (apple.isSpecialEventFruit) 0f else sin(apple.bobPhase) * 3f
             val dropH = apple.dropHeight
-            val curY = ay + bob - dropH // Render fruit above table based on drop height
+            val curY = ay + bob - dropH
 
-            // 1. Dynamic Drop Shadow on Table Surface (fades and scales as fruit is in air)
-            val shadowScale = (1f - (dropH / 180f).coerceIn(0f, 0.7f))
-            val shadowAlpha = (0.5f - (dropH / 240f).coerceIn(0f, 0.4f)).coerceAtLeast(0.1f)
-            val shadowW = 26f * shadowScale
-            val shadowH = 14f * shadowScale
-
-            scope.drawOval(
-                color = Color.Black.copy(alpha = shadowAlpha),
-                topLeft = Offset(ax - shadowW / 2f, ay + 6f - shadowH / 2f),
-                size = Size(shadowW, shadowH)
+            // contact shadow shrinks & fades as the fruit rises
+            val lift = (dropH / 180f).coerceIn(0f, 0.7f)
+            val bobLift = (bob + 3f) / 6f * 0.12f
+            softOval(
+                Offset(ax + SHADOW_DX * 0.6f + dropH * 0.08f, ay + 12f + dropH * 0.1f),
+                18f * (1f - lift) * (1f - bobLift),
+                9f * (1f - lift) * (1f - bobLift),
+                (0.55f - lift * 0.5f).coerceAtLeast(0.12f)
             )
 
             when (apple.fruitType) {
                 FruitType.REGULAR_APPLE -> {
-                    // 3D Spherical Red Apple Body
-                    scope.drawCircle(
-                        brush = Brush.radialGradient(
-                            colors = listOf(
-                                Color(0xFFFF8A80),
-                                Color(0xFFE53935),
-                                Color(0xFFC62828),
-                                Color(0xFF8E0000)
-                            ),
-                            center = Offset(ax - 4f, curY - 4f),
-                            radius = 20f
-                        ),
-                        radius = 16f,
-                        center = Offset(ax, curY)
-                    )
-
-                    // Apple Top Dimple indent
-                    scope.drawOval(
-                        color = Color(0xFF6B0E0E),
-                        topLeft = Offset(ax - 4f, curY - 16f),
-                        size = Size(8f, 3.5f)
-                    )
-
-                    // Specular Gloss Highlight
-                    scope.drawCircle(
-                        color = Color(0x90FFFFFF),
-                        radius = 3.5f,
-                        center = Offset(ax - 5f, curY - 7f)
-                    )
-
-                    // Apple Woody Stem
-                    val stemPath = Path().apply {
-                        moveTo(ax, curY - 15f)
-                        quadraticTo(ax - 3f, curY - 22f, ax - 5f, curY - 26f)
-                    }
-                    scope.drawPath(
-                        stemPath,
-                        color = Color(0xFF5D4037),
-                        style = Stroke(width = 2.4f, cap = StrokeCap.Round)
-                    )
-
-                    // Vibrant Crisp Green Leaf
-                    val leafPath = Path().apply {
-                        moveTo(ax - 2f, curY - 20f)
-                        quadraticTo(ax + 6f, curY - 26f, ax + 12f, curY - 22f)
-                        quadraticTo(ax + 6f, curY - 17f, ax - 2f, curY - 20f)
-                    }
-                    scope.drawPath(leafPath, color = Color(0xFF43A047), style = Fill)
-                    scope.drawPath(leafPath, color = Color(0xFF81C784), style = Stroke(width = 1f))
+                    val r = 16f
+                    shinyFruitBody(ax, curY, r, Color(0xFFFF8A80), Color(0xFFE53935), Color(0xFF8E0000), Color(0x66FFB199))
+                    stemAndLeaf(ax, curY, r, Color(0xFF6D4C41), Color(0xFF7CB342), Color(0xFF2E7D32))
                 }
                 FruitType.ESCAPE_GOLDEN -> {
-                    // Golden Escape Fruit - energetic shimmering yellow/gold
-                    val pulse = sin(apple.sparkleTimer * 8f) * 1.5f
-                    val fRadius = 17f + pulse
-
-                    // Outer golden glow
-                    scope.drawCircle(
-                        brush = Brush.radialGradient(
-                            colors = listOf(Color(0x80FFD700), Color(0x00FFD700)),
-                            center = Offset(ax, curY),
-                            radius = fRadius + 8f
-                        ),
-                        radius = fRadius + 8f,
-                        center = Offset(ax, curY)
-                    )
-
-                    // Golden body
-                    scope.drawCircle(
-                        brush = Brush.radialGradient(
-                            colors = listOf(
-                                Color(0xFFFFF9C4),
-                                Color(0xFFFFD54F),
-                                Color(0xFFFFA000),
-                                Color(0xFFE65100)
-                            ),
-                            center = Offset(ax - 4f, curY - 4f),
-                            radius = fRadius + 4f
-                        ),
-                        radius = fRadius,
-                        center = Offset(ax, curY)
-                    )
-
-                    // Gloss
-                    scope.drawCircle(
-                        color = Color(0xCCFFFFFF),
-                        radius = 4f,
-                        center = Offset(ax - 5f, curY - 6f)
-                    )
-
-                    // Golden Stem & leaf
-                    val stemPath = Path().apply {
-                        moveTo(ax, curY - 15f)
-                        lineTo(ax - 2f, curY - 24f)
+                    val pulse = sin(apple.sparkleTimer * 8f) * 1.2f
+                    val r = 17f + pulse
+                    glow(Offset(ax, curY), r * 2.2f, Color(0x88FFD54F))
+                    shinyFruitBody(ax, curY, r, Color(0xFFFFFDE7), Color(0xFFFFC107), Color(0xFFB26A00), Color(0x88FFF59D))
+                    stemAndLeaf(ax, curY, r, Color(0xFFFF8F00), Color(0xFFFFF176), Color(0xFFF9A825))
+                    for (k in 0 until 3) {
+                        val a = apple.sparkleTimer * 2.5f + k * 2.094f
+                        val tw = 0.5f + 0.5f * sin(apple.sparkleTimer * 9f + k * 2f)
+                        sparkle(Offset(ax + cos(a) * r * 1.5f, curY + sin(a) * r * 1.35f), 3f + tw * 3.5f, Color(0xFFFFF8E1).copy(alpha = 0.5f + tw * 0.5f))
                     }
-                    scope.drawPath(stemPath, color = Color(0xFFFF8F00), style = Stroke(width = 2.5f, cap = StrokeCap.Round))
-
-                    val leafPath = Path().apply {
-                        moveTo(ax - 2f, curY - 19f)
-                        quadraticTo(ax + 6f, curY - 25f, ax + 11f, curY - 20f)
-                        quadraticTo(ax + 5f, curY - 16f, ax - 2f, curY - 19f)
-                    }
-                    scope.drawPath(leafPath, color = Color(0xFFFFD700), style = Fill)
                 }
                 FruitType.ESCAPE_STAR_POWER -> {
-                    // SPECIAL TEMPORARY FRUIT / 7ARAKA STAR POWER
-                    // Vibrant pulsating Cyan / Magenta / Star Fruit with animated energy halo!
-                    val pulse = sin(apple.sparkleTimer * 10f) * 2.5f
-                    val fRadius = 19f + pulse
-
-                    // Electric halo ring
-                    scope.drawCircle(
-                        brush = Brush.radialGradient(
-                            colors = listOf(
-                                Color(0x0000E5FF),
-                                Color(0x8000E5FF),
-                                Color(0xCCFF007F),
-                                Color(0x00FF007F)
-                            ),
-                            center = Offset(ax, curY),
-                            radius = fRadius + 14f
-                        ),
-                        radius = fRadius + 14f,
-                        center = Offset(ax, curY)
-                    )
-
-                    // 3D Star Fruit Body
-                    scope.drawCircle(
-                        brush = Brush.radialGradient(
-                            colors = listOf(
-                                Color(0xFFE0F7FA),
-                                Color(0xFF00E5FF),
-                                Color(0xFF0091EA),
-                                Color(0xFF6200EA)
-                            ),
-                            center = Offset(ax - 4f, curY - 4f),
-                            radius = fRadius + 4f
-                        ),
-                        radius = fRadius,
-                        center = Offset(ax, curY)
-                    )
-
-                    // Star emblem on fruit
-                    val starPath = Path().apply {
-                        val numPoints = 5
-                        for (p in 0 until numPoints * 2) {
-                            val r = if (p % 2 == 0) 10f else 4.5f
-                            val a = (p * PI / numPoints - PI / 2f + apple.sparkleTimer * 3f).toFloat()
-                            val sx = ax + cos(a) * r
-                            val sy = curY + sin(a) * r
-                            if (p == 0) moveTo(sx, sy) else lineTo(sx, sy)
-                        }
-                        close()
+                    val pulse = sin(apple.sparkleTimer * 10f) * 2f
+                    val r = 19f + pulse
+                    val c = Offset(ax, curY)
+                    glow(c, r * 2.4f, Color(0x66FF007F))
+                    glow(c, r * 1.8f, Color(0x8800E5FF))
+                    rotate(apple.sparkleTimer * 90f, pivot = c) {
+                        drawCircle(
+                            Color(0xCCFFFFFF), radius = r * 1.35f, center = c,
+                            style = Stroke(1.6f, pathEffect = PathEffect.dashPathEffect(floatArrayOf(4f, 7f)))
+                        )
                     }
-                    scope.drawPath(starPath, color = Color(0xFFFFEA00), style = Fill)
-                    scope.drawPath(starPath, color = Color.White, style = Stroke(width = 1.2f))
-
-                    // Specular highlight
-                    scope.drawCircle(
-                        color = Color.White,
-                        radius = 4f,
-                        center = Offset(ax - 6f, curY - 7f)
+                    // carambola: 5 rounded lobes
+                    val rot = apple.sparkleTimer * 1.2f
+                    val star = starPath(ax, curY, r * 1.05f, r * 0.55f, 5, rot)
+                    drawPath(star, Color(0xFF1A237E), style = Stroke(5f, join = StrokeJoin.Round))
+                    drawPath(
+                        star,
+                        Brush.radialGradient(
+                            0f to Color(0xFFFFFFFF), 0.25f to Color(0xFF84FFFF), 0.65f to Color(0xFF00B0FF), 1f to Color(0xFF6200EA),
+                            center = Offset(ax + LIGHT_X * r * 0.35f, curY + LIGHT_Y * r * 0.35f), radius = r * 1.3f
+                        )
                     )
+                    drawPath(star, Color.White.copy(alpha = 0.85f), style = Stroke(1.6f, join = StrokeJoin.Round))
+                    // ridge lines
+                    for (p in 0 until 5) {
+                        val a = (p * 2 * PI / 5 - PI / 2).toFloat() + rot
+                        drawLine(Color.White.copy(alpha = 0.45f), c, Offset(ax + cos(a) * r * 0.9f, curY + sin(a) * r * 0.9f), strokeWidth = 1.2f)
+                    }
+                    drawPath(starPath(ax, curY, r * 0.34f, r * 0.15f, 5, -rot * 2f), Color(0xFFFFEA00))
+                    drawCircle(Color.White, radius = r * 0.13f, center = Offset(ax - r * 0.35f, curY - r * 0.4f))
                 }
             }
         }
     }
 
+    // =====================================================================
+    //  PARTICLES
+    // =====================================================================
+
     fun drawParticles(
         scope: DrawScope,
         particles: List<Particle>,
         boardCenter: Offset
-    ) {
+    ) = with(scope) {
         for (p in particles) {
-            val px = boardCenter.x + p.pos.x
-            val py = boardCenter.y + p.pos.y
-            scope.drawCircle(
-                color = p.color.copy(alpha = p.alpha),
-                radius = p.size * p.alpha,
-                center = Offset(px, py)
-            )
+            val c = Offset(boardCenter.x + p.pos.x, boardCenter.y + p.pos.y)
+            val a = p.alpha.coerceIn(0f, 1f)
+            val r = p.size * (0.4f + 0.6f * a)
+            glow(c, r * 2.4f, p.color.copy(alpha = 0.45f * a))
+            drawCircle(p.color.copy(alpha = a), radius = r, center = c)
+            drawCircle(Color.White.copy(alpha = 0.7f * a), radius = r * 0.4f, center = c - Offset(r * 0.2f, r * 0.2f))
         }
     }
 }
