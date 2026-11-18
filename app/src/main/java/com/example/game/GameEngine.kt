@@ -84,6 +84,26 @@ class GameEngine(
     var bannerMessage: String? = null
         private set
     var bannerTimer: Float = 0f
+
+    // ===================== v2.0 "io" systems =====================
+    /** Power-ups currently lying on the board. */
+    val powerUps = CopyOnWriteArrayList<PowerUpItem>()
+    var magnetTimer = 0f
+        private set
+    var freezeTimer = 0f
+        private set
+    var doubleTimer = 0f
+        private set
+    /** Fruit chain: collecting again within [COMBO_WINDOW] seconds raises the multiplier. */
+    var comboCount = 0
+        private set
+    var comboTimer = 0f
+        private set
+    var lastPointsGained = 0
+        private set
+    private var powerSpawnTimer = 6f
+    private var nextPowerId = 1
+    private var fruitsSinceGrowth = 0
         private set
 
     // Physics parameters
@@ -118,6 +138,7 @@ class GameEngine(
         fruitsCollectedSinceEvent = 0
         bannerMessage = null
         bannerTimer = 0f
+        resetIoSystems()
 
         val isDual = if (config.isSolo) {
             stage.isDualArmadillo
@@ -401,6 +422,45 @@ class GameEngine(
                 obstacles.add(Obstacle(id = 7, pos = Vector2(-hw * 0.20f, 0f), radius = 30f, type = ObstacleType.LAVA_HAZARD))
                 obstacles.add(Obstacle(id = 8, pos = Vector2(hw * 0.20f, 0f), radius = 30f, type = ObstacleType.LAVA_HAZARD))
             }
+            StageTheme.NEON -> {
+                // Neon grid: 4 glowing pylons in a diamond, open centre for power-up fights
+                obstacles.add(Obstacle(id = 1, pos = Vector2(-hw * 0.45f, 0f), radius = 24f, type = ObstacleType.TEMPLE_PILLAR))
+                obstacles.add(Obstacle(id = 2, pos = Vector2(hw * 0.45f, 0f), radius = 24f, type = ObstacleType.TEMPLE_PILLAR))
+                obstacles.add(Obstacle(id = 3, pos = Vector2(0f, -hh * 0.45f), radius = 22f, type = ObstacleType.TEMPLE_PILLAR))
+                obstacles.add(Obstacle(id = 4, pos = Vector2(0f, hh * 0.45f), radius = 22f, type = ObstacleType.TEMPLE_PILLAR))
+            }
+            StageTheme.OCEAN -> {
+                obstacles.add(Obstacle(id = 1, pos = Vector2(-hw * 0.42f, -hh * 0.32f), radius = 26f, type = ObstacleType.ROCK))
+                obstacles.add(Obstacle(id = 2, pos = Vector2(hw * 0.42f, hh * 0.32f), radius = 26f, type = ObstacleType.ROCK))
+                obstacles.add(
+                    Obstacle(
+                        id = 3, pos = Vector2(0f, 0f), radius = 26f, type = ObstacleType.MOVING_BOULDER,
+                        minBound = -hh * 0.55f, maxBound = hh * 0.55f, moveSpeed = 60f, moveDir = 1f, isHorizontal = false
+                    )
+                )
+            }
+            StageTheme.CANDY -> {
+                obstacles.add(Obstacle(id = 1, pos = Vector2(-hw * 0.30f, -hh * 0.38f), radius = 22f, type = ObstacleType.ROCK))
+                obstacles.add(Obstacle(id = 2, pos = Vector2(hw * 0.30f, hh * 0.38f), radius = 22f, type = ObstacleType.ROCK))
+                obstacles.add(Obstacle(id = 3, pos = Vector2(hw * 0.30f, -hh * 0.38f), radius = 22f, type = ObstacleType.ROCK))
+                obstacles.add(Obstacle(id = 4, pos = Vector2(-hw * 0.30f, hh * 0.38f), radius = 22f, type = ObstacleType.ROCK))
+            }
+            StageTheme.COSMOS -> {
+                obstacles.add(Obstacle(id = 1, pos = Vector2(-hw * 0.48f, 0f), radius = 30f, type = ObstacleType.LAVA_HAZARD))
+                obstacles.add(Obstacle(id = 2, pos = Vector2(hw * 0.48f, 0f), radius = 30f, type = ObstacleType.LAVA_HAZARD))
+                obstacles.add(
+                    Obstacle(
+                        id = 3, pos = Vector2(0f, -hh * 0.42f), radius = 24f, type = ObstacleType.MOVING_BOULDER,
+                        minBound = -hw * 0.40f, maxBound = hw * 0.40f, moveSpeed = 90f, moveDir = 1f, isHorizontal = true
+                    )
+                )
+                obstacles.add(
+                    Obstacle(
+                        id = 4, pos = Vector2(0f, hh * 0.42f), radius = 24f, type = ObstacleType.MOVING_BOULDER,
+                        minBound = -hw * 0.40f, maxBound = hw * 0.40f, moveSpeed = 90f, moveDir = -1f, isHorizontal = true
+                    )
+                )
+            }
         }
     }
 
@@ -475,9 +535,128 @@ class GameEngine(
         updateObstacles(clampedDt)
         updateSnakes(clampedDt, snake1InputX, snake1InputY, snake2InputX, snake2InputY)
         updateApples(clampedDt)
+        updateIoSystems(clampedDt)
         updateParticles(clampedDt)
         checkCollisions()
     }
+
+    private fun resetIoSystems() {
+        powerUps.clear()
+        magnetTimer = 0f; freezeTimer = 0f; doubleTimer = 0f
+        comboCount = 0; comboTimer = 0f; lastPointsGained = 0
+        powerSpawnTimer = 6f
+        fruitsSinceGrowth = 0
+    }
+
+    private val isPowerRushStage: Boolean
+        get() = currentStage.id >= 17
+
+    private fun updateIoSystems(dt: Float) {
+        if (magnetTimer > 0f) magnetTimer = (magnetTimer - dt).coerceAtLeast(0f)
+        if (freezeTimer > 0f) freezeTimer = (freezeTimer - dt).coerceAtLeast(0f)
+        if (doubleTimer > 0f) doubleTimer = (doubleTimer - dt).coerceAtLeast(0f)
+        if (comboTimer > 0f) {
+            comboTimer -= dt
+            if (comboTimer <= 0f) { comboTimer = 0f; comboCount = 0 }
+        }
+
+        // Spawn power-ups
+        powerSpawnTimer -= dt
+        val maxOnBoard = if (isPowerRushStage) 2 else 1
+        if (powerSpawnTimer <= 0f) {
+            powerSpawnTimer = if (isPowerRushStage) 6.5f + Random.nextFloat() * 3f else 11f + Random.nextFloat() * 5f
+            if (powerUps.size < maxOnBoard) {
+                val types = PowerType.values()
+                powerUps.add(PowerUpItem(id = nextPowerId++, pos = getRandomSafeApplePos(), type = types[Random.nextInt(types.size)]))
+            }
+        }
+
+        // Age power-ups and check pickup by any alive armadillo
+        val alive = buildList {
+            if (!armadillo.isEaten) add(armadillo)
+            armadillo2?.let { if (!it.isEaten) add(it) }
+        }
+        for (i in powerUps.indices.reversed()) {
+            val p = powerUps[i]
+            val aged = p.copy(life = p.life - dt, phase = p.phase + dt)
+            val picker = alive.firstOrNull { it.pos.distance(p.pos) < it.radius + 26f }
+            when {
+                picker != null -> {
+                    powerUps.removeAt(i)
+                    activatePower(p.type, p.pos)
+                }
+                aged.life <= 0f -> powerUps.removeAt(i)
+                else -> powerUps[i] = aged
+            }
+        }
+
+        // Magnet: regular fruit glides toward the nearest armadillo
+        if (magnetTimer > 0f && alive.isNotEmpty()) {
+            for (i in apples.indices) {
+                val a = apples[i]
+                if (a.isSpecialEventFruit && a.dropHeight > 10f) continue
+                val target = alive.minByOrNull { it.pos.distance(a.pos) }!!
+                val d = target.pos.distance(a.pos)
+                if (d in 1f..320f) {
+                    val step = (360f * dt).coerceAtMost(d)
+                    apples[i] = a.copy(pos = a.pos + (target.pos - a.pos).normalized() * step)
+                }
+            }
+        }
+    }
+
+    private fun activatePower(type: PowerType, at: Vector2) {
+        when (type) {
+            PowerType.MAGNET -> { magnetTimer = type.duration; showBanner("🧲 MAGNET! Fruits come to you") }
+            PowerType.FREEZE -> { freezeTimer = type.duration; showBanner("❄️ FREEZE! Snakes slowed") }
+            PowerType.DOUBLE -> { doubleTimer = type.duration; showBanner("✖️2 DOUBLE POINTS!") }
+            PowerType.SHRINK -> {
+                for (i in snakes.indices) {
+                    val sn = snakes[i]
+                    val keep = (sn.bodySegments.size - 6).coerceAtLeast(MIN_SNAKE_SEGMENTS)
+                    snakes[i] = sn.copy(bodySegments = sn.bodySegments.take(keep))
+                }
+                if (snakes.isNotEmpty()) snake = snakes[0]
+                showBanner("✂️ SNAKES SHRUNK!")
+            }
+        }
+        onPowerActivated?.invoke()
+        spawnPowerBurstParticles(at)
+    }
+
+    /** Points for one fruit: kind value × combo × double. Also drives snake growth. */
+    private fun awardFruitPoints(apple: AppleItem): Int {
+        comboCount = if (comboTimer > 0f) (comboCount + 1).coerceAtMost(MAX_COMBO) else 1
+        comboTimer = COMBO_WINDOW
+        val base = when (apple.fruitType) {
+            FruitType.REGULAR_APPLE -> FruitKinds.points.getOrElse(apple.kind) { 1 }
+            FruitType.ESCAPE_GOLDEN -> 2
+            FruitType.ESCAPE_STAR_POWER -> 3
+        }
+        val comboBonus = (comboCount - 1).coerceAtLeast(0)
+        var pts = base + comboBonus
+        if (doubleTimer > 0f) pts *= 2
+        lastPointsGained = pts
+        if (comboCount >= 3) showBanner("🔥 COMBO x$comboCount  +$pts")
+
+        // snake.io pressure: serpents grow as the player feeds
+        fruitsSinceGrowth++
+        if (fruitsSinceGrowth >= GROWTH_EVERY_FRUITS) {
+            fruitsSinceGrowth = 0
+            for (i in snakes.indices) {
+                val sn = snakes[i]
+                if (sn.bodySegments.size < MAX_SNAKE_SEGMENTS) {
+                    val tail = sn.bodySegments.lastOrNull() ?: sn.headPos
+                    snakes[i] = sn.copy(bodySegments = sn.bodySegments + listOf(tail, tail))
+                }
+            }
+            if (snakes.isNotEmpty()) snake = snakes[0]
+        }
+        return pts
+    }
+
+    val freezeFactor: Float
+        get() = if (freezeTimer > 0f) 0.4f else 1f
 
     private fun computeArmadilloAiInput(arm: ArmadilloState): Vector2 {
         if (arm.isEaten) return Vector2.Zero
@@ -956,7 +1135,7 @@ class GameEngine(
 
             // Advance head with slithering motion
             val forwardDir = Vector2(cos(newHeadAngle), sin(newHeadAngle))
-            val newHeadPos = curSnake.headPos + forwardDir * (targetSpeed * dt)
+            val newHeadPos = curSnake.headPos + forwardDir * (targetSpeed * freezeFactor * dt)
 
             // Boundary constraint for snake head
             val sBoundX = boardHalfWidth - 35f
@@ -1150,7 +1329,7 @@ class GameEngine(
                     eatenIndices.add(i)
 
                     // Collect Apple!
-                    val newScore = stats.score + 1
+                    val newScore = stats.score + awardFruitPoints(apple)
                     val newHigh = maxOf(stats.highScore, newScore)
                     stats = stats.copy(score = newScore, highScore = newHigh)
                     onScoreChanged?.invoke(newScore)
@@ -1208,7 +1387,7 @@ class GameEngine(
                     eatenIndices.add(i)
 
                     // Collect Apple!
-                    val newScore = stats.score + 1
+                    val newScore = stats.score + awardFruitPoints(apple)
                     val newHigh = maxOf(stats.highScore, newScore)
                     stats = stats.copy(score = newScore, highScore = newHigh)
                     onScoreChanged?.invoke(newScore)
@@ -1264,7 +1443,7 @@ class GameEngine(
                             spawnStandardApples(3)
                         }
                     } else {
-                        apples[idx] = eaten.copy(pos = getRandomSafeApplePos())
+                        apples[idx] = eaten.copy(pos = getRandomSafeApplePos(), kind = FruitKinds.random())
                     }
                 }
             }
@@ -1475,7 +1654,8 @@ class GameEngine(
                 AppleItem(
                     id = nextAppleId++,
                     pos = getRandomSafeApplePos(),
-                    fruitType = FruitType.REGULAR_APPLE
+                    fruitType = FruitType.REGULAR_APPLE,
+                    kind = FruitKinds.random()
                 )
             )
         }
@@ -1794,5 +1974,13 @@ class GameEngine(
         while (a > Math.PI) a -= (2 * Math.PI).toFloat()
         while (a < -Math.PI) a += (2 * Math.PI).toFloat()
         return a
+    }
+
+    companion object {
+        const val COMBO_WINDOW = 2.4f
+        const val MAX_COMBO = 6
+        const val GROWTH_EVERY_FRUITS = 6
+        const val MIN_SNAKE_SEGMENTS = 8
+        const val MAX_SNAKE_SEGMENTS = 30
     }
 }

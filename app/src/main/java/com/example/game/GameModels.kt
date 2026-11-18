@@ -81,8 +81,24 @@ data class AppleItem(
     val isSpecialEventFruit: Boolean = false,
     val escapeSpeed: Float = 0f,
     val escapeAngle: Float = 0f,
-    val sparkleTimer: Float = 0f
+    val sparkleTimer: Float = 0f,
+    /** Visual/point variety for regular fruit: 0 apple(1) 1 orange(1) 2 grapes(2) 3 cherries(2) 4 watermelon(3) */
+    val kind: Int = 0
 )
+
+object FruitKinds {
+    val points = intArrayOf(1, 1, 2, 2, 3)
+    fun random(rnd: kotlin.random.Random = kotlin.random.Random): Int {
+        val r = rnd.nextFloat()
+        return when {
+            r < 0.42f -> 0
+            r < 0.66f -> 1
+            r < 0.82f -> 2
+            r < 0.94f -> 3
+            else -> 4
+        }
+    }
+}
 
 data class Particle(
     val pos: Vector2,
@@ -108,8 +124,29 @@ enum class StageTheme {
     VOLCANO,
     ICE,
     DARK_TEMPLE,
-    FINAL_ARENA
+    FINAL_ARENA,
+    // World 3 (rounds 17–20, version 2.0)
+    NEON,
+    OCEAN,
+    CANDY,
+    COSMOS
 }
+
+/** Collectible power-ups (v2.0). Each one lives on the board for a while, then fades. */
+enum class PowerType(val label: String, val duration: Float) {
+    MAGNET("MAGNET", 8f),
+    FREEZE("FREEZE", 6f),
+    DOUBLE("x2 POINTS", 10f),
+    SHRINK("SNAKE SHRINK", 0f)
+}
+
+data class PowerUpItem(
+    val id: Int,
+    val pos: Vector2,
+    val type: PowerType,
+    val life: Float = 11f,
+    val phase: Float = 0f
+)
 
 enum class ObstacleType {
     ROCK,
@@ -151,6 +188,7 @@ data class StageConfig(
 
     companion object {
         val allStages: List<StageConfig> get() = ALL_STAGES
+        val MAX_ROUND: Int get() = ALL_STAGES.size
 
         fun getStage(id: Int): StageConfig {
             return ALL_STAGES.find { it.id == id } ?: ALL_STAGES.first()
@@ -423,6 +461,75 @@ data class StageConfig(
                 maxAllowedLosses = 1,
                 description = "The ultimate dual-armadillo marathon: 3 apex predator serpents, shifting barriers, lava traps, and fast escaping fruits. The pinnacle challenge!",
                 mechanicsBadge = "Dual Armadillos • 3 Apex Serpents • 1 Loss Allowed • 100 Apples"
+            ),
+            // =========================================================================
+            // ROUNDS 17–20: WORLD 3 — POWER-UP ARENAS (v2.0)
+            // =========================================================================
+            StageConfig(
+                id = 17,
+                name = "Neon City",
+                subtitle = "Glowing Grid Arena",
+                icon = "🌃",
+                theme = StageTheme.NEON,
+                targetFruits = 45,
+                snakeCount = 2,
+                baseSnakeSpeed = 150f,
+                friction = 0.95f,
+                hasEscapingFruits = false,
+                isDualArmadillo = false,
+                maxAllowedLosses = 4,
+                description = "A neon arena built for power-ups: magnets, freezes and x2 points spawn often. Chain combos while two neon serpents hunt you.",
+                mechanicsBadge = "Power-Up Rush • 2 Serpents • 4 Losses • 45 Fruits"
+            ),
+            StageConfig(
+                id = 18,
+                name = "Deep Ocean",
+                subtitle = "Coral Reef Drift",
+                icon = "🌊",
+                theme = StageTheme.OCEAN,
+                targetFruits = 50,
+                snakeCount = 2,
+                baseSnakeSpeed = 158f,
+                friction = 0.965f,
+                hasEscapingFruits = true,
+                hasMovingTraps = true,
+                isDualArmadillo = false,
+                maxAllowedLosses = 4,
+                description = "Drifting currents, rolling coral boulders and fruit that swims away. Sea serpents grow longer with every fruit you take.",
+                mechanicsBadge = "Drifting Floor • Growing Serpents • 4 Losses • 50 Fruits"
+            ),
+            StageConfig(
+                id = 19,
+                name = "Candy Land",
+                subtitle = "Sugar Rush Party",
+                icon = "🍭",
+                theme = StageTheme.CANDY,
+                targetFruits = 55,
+                snakeCount = 2,
+                baseSnakeSpeed = 168f,
+                friction = 0.94f,
+                hasEscapingFruits = true,
+                isDualArmadillo = true,
+                maxAllowedLosses = 3,
+                description = "Two armadillos, gumdrop obstacles and a sugar-rush of bonus fruit. Keep the combo alive for huge scores.",
+                mechanicsBadge = "Dual Armadillos • Combo Party • 3 Losses • 55 Fruits"
+            ),
+            StageConfig(
+                id = 20,
+                name = "Cosmos",
+                subtitle = "Zero-G Grand Finale",
+                icon = "🪐",
+                theme = StageTheme.COSMOS,
+                targetFruits = 70,
+                snakeCount = 3,
+                baseSnakeSpeed = 185f,
+                friction = 0.97f,
+                hasEscapingFruits = true,
+                hasMovingTraps = true,
+                isDualArmadillo = true,
+                maxAllowedLosses = 3,
+                description = "The new grand finale among the stars: low-gravity drift, three cosmic serpents and every power-up in play.",
+                mechanicsBadge = "Dual Armadillos • 3 Cosmic Serpents • 3 Losses • 70 Fruits"
             )
         )
     }

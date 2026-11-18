@@ -18,6 +18,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.safeDrawingPadding
 import com.example.game.StageTheme
+import com.example.game.StageConfig
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
@@ -162,7 +163,7 @@ fun MultiplayerModeScreen(
                     modifier = Modifier.testTag("mp_continue_stage_select_button")
                 ) {
                     Text(
-                        text = "CHOOSE ROUND (1–16)",
+                        text = "CHOOSE ROUND (1–${StageConfig.MAX_ROUND})",
                         fontSize = 11.sp,
                         fontWeight = FontWeight.Black
                     )

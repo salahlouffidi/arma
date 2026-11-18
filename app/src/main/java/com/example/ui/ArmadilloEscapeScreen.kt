@@ -135,6 +135,11 @@ fun ArmadilloEscapeScreen(
 
     // Ads are created/initialised by MainActivity after UMP consent; without one we run ad-free.
     val effectiveAdManager = remember(adManager) { adManager ?: AdManager(context.applicationContext) { false } }
+    // Interstitial at a natural pause (round cleared / leaving after a loss), then continue.
+    val showBreakAd: (() -> Unit) -> Unit = { next ->
+        val act = context.findActivity()
+        if (act != null) effectiveAdManager.showInterstitialWhenReady(act, onFinished = next) else next()
+    }
 
     val haptics = remember { HapticFeedbackHelper(context) }
     val progressManager = remember { StageProgressManager(context) }
@@ -262,7 +267,7 @@ fun ArmadilloEscapeScreen(
                 progressManager.completeStage(stage.id)
                 highestUnlockedStage = progressManager.getHighestUnlockedStage()
                 haptics.powerActivated()
-                if (stage.id < 16) {
+                if (stage.id < StageConfig.MAX_ROUND) {
                     soundManager.playStageCompleted()
                 } else {
                     soundManager.playFinalStageCompleted()
@@ -299,6 +304,10 @@ fun ArmadilloEscapeScreen(
         isGamePaused = false
         val config = StageConfig.getStage(currentStageId)
         gameEngine.loadStage(config)
+        effectiveAdManager.preload()
+    }
+    LaunchedEffect(gameOverDialogData != null, stageClearDialogData != null) {
+        effectiveAdManager.preload()
     }
 
     // Score pop animation
@@ -384,7 +393,10 @@ fun ArmadilloEscapeScreen(
                     activeMatchConfig = MatchConfig.solo()
                     currentScreen = GameScreenState.STAGE_SELECT
                 },
-                onOpenPrivacyOptions = if (privacyOptionsRequired) onOpenPrivacyOptions else null
+                onOpenPrivacyOptions = if (privacyOptionsRequired) onOpenPrivacyOptions else null,
+                onDebugAdInspector = if (com.example.BuildConfig.DEBUG) {
+                    { context.findActivity()?.let { effectiveAdManager.openAdInspector(it) } }
+                } else null
             )
         }
         GameScreenState.GAME_MODE_SELECT -> {
@@ -509,12 +521,17 @@ fun ArmadilloEscapeScreen(
 
                 TableRenderer.drawTrails(this, tableCenter)
 
-                // 2. Draw Apples
+                // 2. Draw Apples + power-ups
                 TableRenderer.drawApples(
                     scope = this,
                     apples = gameEngine.apples,
                     boardCenter = tableCenter
                 )
+                TableRenderer.drawPowerUps(this, gameEngine.powerUps, tableCenter)
+                if (gameEngine.magnetTimer > 0f) {
+                    TableRenderer.drawMagnetAura(this, gameEngine.armadillo, tableCenter)
+                    gameEngine.armadillo2?.let { TableRenderer.drawMagnetAura(this, it, tableCenter) }
+                }
 
                 // 3. Draw 3D Armadillos
                 TableRenderer.drawArmadillo(
@@ -537,7 +554,8 @@ fun ArmadilloEscapeScreen(
                 TableRenderer.drawSnakes(
                     scope = this,
                     snakes = gameEngine.snakes,
-                    boardCenter = tableCenter
+                    boardCenter = tableCenter,
+                    frozen = gameEngine.freezeTimer > 0f
                 )
 
                 // 5. Draw Particles
@@ -795,6 +813,17 @@ fun ArmadilloEscapeScreen(
                     .padding(end = 88.dp)
             )
         }
+
+        // ==================== v2.0 POWER-UP / COMBO STRIP ====================
+        IoStatusStrip(
+            tick = tick,
+            magnet = gameEngine.magnetTimer,
+            freeze = gameEngine.freezeTimer,
+            double = gameEngine.doubleTimer,
+            combo = gameEngine.comboCount,
+            comboTimer = gameEngine.comboTimer,
+            modifier = Modifier.align(Alignment.TopCenter).padding(top = 50.dp)
+        )
 
 
         // ==================== VIRTUAL JOYSTICKS ====================
@@ -1197,21 +1226,21 @@ fun ArmadilloEscapeScreen(
             StageClearDialog(
                 data = clearData,
                 onNextStage = {
-                    val nextId = (clearData.stage.id + 1).coerceAtMost(16)
-                    currentStageId = nextId
-                    val config = StageConfig.getStage(nextId)
-                    gameEngine.loadStage(config, activeMatchConfig)
                     stageClearDialogData = null
+                    showBreakAd {
+                        val nextId = (clearData.stage.id + 1).coerceAtMost(StageConfig.MAX_ROUND)
+                        currentStageId = nextId
+                        val config = StageConfig.getStage(nextId)
+                        gameEngine.loadStage(config, activeMatchConfig)
+                    }
                 },
                 onRetryStage = {
-                    val retryId = clearData.stage.id
-                    val config = StageConfig.getStage(retryId)
-                    gameEngine.resetRound()
                     stageClearDialogData = null
+                    showBreakAd { gameEngine.resetRound(); isGamePaused = false }
                 },
                 onSelectOther = {
                     stageClearDialogData = null
-                    currentScreen = GameScreenState.STAGE_SELECT
+                    showBreakAd { currentScreen = GameScreenState.STAGE_SELECT }
                 }
             )
         }
@@ -1239,7 +1268,7 @@ fun ArmadilloEscapeScreen(
                     }
 
                     if (activity != null) {
-                        effectiveAdManager.showInterstitial(
+                        effectiveAdManager.showInterstitialWhenReady(
                             activity = activity,
                             onFinished = {
                                 doResetAndStart()
@@ -1252,8 +1281,9 @@ fun ArmadilloEscapeScreen(
                 onWatchAdSecondChance = {
                     val activity = context.findActivity()
                     if (activity != null) {
-                        effectiveAdManager.showRewarded(
+                        effectiveAdManager.showRewardedWhenReady(
                             activity = activity,
+                            onLoading = { loading -> adStatusMessage = if (loading) "Loading your video…" else null },
                             onRewardEarned = {
                                 gameOverDialogData = null
                                 adStatusMessage = null
@@ -1269,17 +1299,17 @@ fun ArmadilloEscapeScreen(
                                 gameEngine.resetRound()
                             },
                             onUnavailable = {
-                                adStatusMessage = "Ad unavailable right now. Tap RETRY!"
+                                adStatusMessage = "No video available right now — try again in a moment."
                             }
                         )
                     } else {
-                        adStatusMessage = "Rewarded ad unavailable. Tap RETRY!"
+                        adStatusMessage = "No video available right now — try again in a moment."
                     }
                 },
                 onExitToRounds = {
                     gameOverDialogData = null
                     adStatusMessage = null
-                    currentScreen = GameScreenState.STAGE_SELECT
+                    showBreakAd { currentScreen = GameScreenState.STAGE_SELECT }
                 }
             )
         }
@@ -1361,7 +1391,7 @@ private fun StageSelectionDialog(
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Text(
-                        text = "🏆 16-ROUND JOURNEY",
+                        text = "🏆 ${StageConfig.MAX_ROUND}-ROUND JOURNEY",
                         color = Color(0xFFFFD700),
                         fontSize = 15.sp,
                         fontWeight = FontWeight.Bold,
@@ -1493,11 +1523,8 @@ private fun StageClearDialog(
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
                 Text(
-                    text = if (data.stage.id == 16) "👑 16-ROUND DUAL MASTER! 👑" else if (data.stage.id == 8) "🌟 ORIGINAL CAMPAIGN CLEARED! 🌟" else "🎉 ROUND ${data.stage.id} CLEARED!",
-                    color = Color(0xFFFFD700),
-                    fontSize = 17.sp,
-                    fontWeight = FontWeight.ExtraBold,
-                    letterSpacing = 0.5.sp
+                    text = if (data.stage.id == StageConfig.MAX_ROUND) "GRAND CHAMPION!" else if (data.stage.id == 16) "WORLD 2 CLEARED!" else if (data.stage.id == 8) "WORLD 1 CLEARED!" else "ROUND ${data.stage.id} CLEARED!",
+                    style = proTitleStyle(26.sp, 3.sp)
                 )
                 Spacer(modifier = Modifier.height(4.dp))
                 Text(
@@ -1564,7 +1591,7 @@ private fun StageClearDialog(
                 if (data.isNewRecord) {
                     Spacer(modifier = Modifier.height(6.dp))
                     Text(
-                        text = "⭐ NEW ROUND HIGH SCORE! ⭐",
+                        text = "NEW ROUND HIGH SCORE!",
                         color = Color(0xFFFFD700),
                         fontSize = 11.sp,
                         fontWeight = FontWeight.Bold
@@ -1574,7 +1601,7 @@ private fun StageClearDialog(
                 Spacer(modifier = Modifier.height(12.dp))
 
                 // Action Buttons
-                if (data.stage.id < 16) {
+                if (data.stage.id < StageConfig.MAX_ROUND) {
                     val next = StageConfig.getStage(data.stage.id + 1)
                     ProStyledButton(
                         onClick = onNextStage,
@@ -1609,7 +1636,7 @@ private fun StageClearDialog(
                             .testTag("replay_arena_button")
                     ) {
                         Text(
-                            text = "👑 REPLAY FINAL DUAL ARENA",
+                            text = "REPLAY THE GRAND FINALE",
                             fontSize = 13.sp,
                             fontWeight = FontWeight.ExtraBold
                         )
@@ -1707,11 +1734,8 @@ private fun GameOverDialog(
                     modifier = Modifier.fillMaxWidth()
                 ) {
                     Text(
-                        text = "💀 GAME OVER 💀",
-                        color = Color(0xFFFF5252),
-                        fontSize = 17.sp,
-                        fontWeight = FontWeight.Black,
-                        letterSpacing = 1.sp,
+                        text = "GAME OVER",
+                        style = proTitleStyle(26.sp, 5.sp).copy(brush = Brush.verticalGradient(listOf(Color(0xFFFFD0C8), Color(0xFFFF5252), Color(0xFFB71C1C)))),
                         textAlign = androidx.compose.ui.text.style.TextAlign.Center,
                         modifier = Modifier.padding(vertical = 5.dp)
                     )
@@ -1891,7 +1915,7 @@ private fun GameOverDialog(
                                 .testTag("game_over_watch_ad_button")
                         ) {
                             Text(
-                                text = "▶ WATCH AD — SECOND CHANCE",
+                                text = "▶ WATCH VIDEO — SECOND CHANCE",
                                 fontSize = 10.sp,
                                 fontWeight = FontWeight.Bold,
                                 maxLines = 1
@@ -1931,4 +1955,28 @@ private tailrec fun android.content.Context.findActivity(): Activity? = when (th
     is Activity -> this
     is android.content.ContextWrapper -> baseContext.findActivity()
     else -> null
+}
+
+@Composable
+private fun IoStatusStrip(
+    tick: Long,
+    magnet: Float,
+    freeze: Float,
+    double: Float,
+    combo: Int,
+    comboTimer: Float,
+    modifier: Modifier = Modifier
+) {
+    @Suppress("UNUSED_VARIABLE") val t = tick
+    Row(modifier = modifier, horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
+        if (magnet > 0f) ProChip("MAGNET ${magnet.toInt() + 1}s", color = Color(0xFFFF6E6E), filled = true)
+        if (freeze > 0f) ProChip("FREEZE ${freeze.toInt() + 1}s", color = Color(0xFF80D8FF), filled = true)
+        if (double > 0f) ProChip("x2 POINTS ${double.toInt() + 1}s", color = Color(0xFFFFD740), filled = true)
+        if (combo >= 2 && comboTimer > 0f) {
+            Text(
+                text = "COMBO x$combo",
+                style = proTitleStyle(if (combo >= 4) 20.sp else 16.sp, 2.sp)
+            )
+        }
+    }
 }

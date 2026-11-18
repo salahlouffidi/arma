@@ -119,6 +119,12 @@ class MainActivity : ComponentActivity() {
         }
     }
 
+    override fun onResume() {
+        super.onResume()
+        // Keep ads warm: reloads anything that failed or expired while in background.
+        if (::adManager.isInitialized && mobileAdsInitStarted.get()) adManager.preload()
+    }
+
     fun enterPip() {
         if (!packageManager.hasSystemFeature(PackageManager.FEATURE_PICTURE_IN_PICTURE)) return
         try {

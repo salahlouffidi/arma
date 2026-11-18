@@ -14,7 +14,7 @@ class DualArmadilloGamePlayTest {
 
     @Test
     fun testAll16StagesConfigured() {
-        assertEquals("Total stages must be 16", 16, StageConfig.allStages.size)
+        assertEquals("Total stages must be 20", 20, StageConfig.allStages.size)
 
         // Stages 1-8 are single armadillo
         for (id in 1..8) {
@@ -73,7 +73,7 @@ class DualArmadilloGamePlayTest {
 
     @Test
     fun testAllStagesUnlockedProgressionConfig() {
-        assertEquals("Total stages must be 16", 16, StageConfig.allStages.size)
+        assertEquals("Total stages must be 20", 20, StageConfig.allStages.size)
         val stages = StageConfig.allStages
         for (i in 1..16) {
             val s = stages.firstOrNull { it.id == i }

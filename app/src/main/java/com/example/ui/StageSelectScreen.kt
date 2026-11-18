@@ -108,7 +108,7 @@ fun StageSelectScreen(
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
                     Text(text = "SELECT ROUND", style = proTitleStyle(22.sp, 3.sp))
                     Text(
-                        text = "CAMPAIGN PROGRESS  $highestUnlocked / 16",
+                        text = "CAMPAIGN PROGRESS  $highestUnlocked / ${StageConfig.MAX_ROUND}",
                         color = ArmaColors.TextLow, fontSize = 10.sp,
                         fontWeight = FontWeight.Bold, letterSpacing = 1.5.sp
                     )
@@ -118,7 +118,7 @@ fun StageSelectScreen(
                     horizontalArrangement = Arrangement.spacedBy(4.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    listOf("ALL (16)", "SOLO (01–08)", "DUAL (09–16)").forEachIndexed { index, label ->
+                    listOf("ALL (${StageConfig.MAX_ROUND})", "SOLO", "DUAL").forEachIndexed { index, label ->
                         val isSel = selectedFilter == index
                         ProButton(
                             text = label,
@@ -215,10 +215,11 @@ private fun RoundCard(
         preferences.getBoolean("single_joystick_right_round_${stage.id}", false)
     } else false
 
+    val accent = themeAccent(stage.theme)
     ProPanel(
         corner = 16.dp,
-        highlighted = isCurrent && isUnlocked,
-        accent = if (isCompleted && !isCurrent) ArmaColors.Green else ArmaColors.Gold,
+        highlighted = isUnlocked,
+        accent = if (isCurrent) ArmaColors.Gold else accent,
         modifier = Modifier
             .fillMaxWidth()
             .then(if (isUnlocked) Modifier.clickable { onClick() } else Modifier)
@@ -238,9 +239,18 @@ private fun RoundCard(
             )
             Text(
                 text = stage.id.toString().padStart(2, '0'),
-                style = proTitleStyle(28.sp, 1.sp),
+                style = proTitleStyle(28.sp, 1.sp).copy(
+                    brush = Brush.verticalGradient(listOf(Color.White, accent, accent.copy(red = accent.red * 0.7f, green = accent.green * 0.7f, blue = accent.blue * 0.7f)))
+                ),
                 modifier = Modifier.align(Alignment.BottomStart).padding(start = 10.dp, bottom = 2.dp)
             )
+            Row(
+                modifier = Modifier.align(Alignment.TopEnd).padding(6.dp),
+                horizontalArrangement = Arrangement.spacedBy(4.dp)
+            ) {
+                if (stage.id >= 17) ProChip("NEW", color = accent, filled = true)
+                if (isCurrent && isUnlocked) ProChip("CURRENT", color = ArmaColors.Gold, filled = true)
+            }
             if (!isUnlocked) {
                 Icon(
                     Icons.Default.Lock, contentDescription = "Locked", tint = ArmaColors.TextMid,
@@ -338,13 +348,13 @@ private fun RoundCard(
             Spacer(modifier = Modifier.height(4.dp))
             Text(
                 stage.title,
-                color = if (isUnlocked) Color.White else Color(0xFF757575),
+                color = if (isUnlocked) accent else Color(0xFF757575),
                 fontSize = 14.sp,
                 fontWeight = FontWeight.Bold
             )
             Text(
                 stage.subtitle,
-                color = if (isUnlocked) Color(0xFFFFAB91) else Color(0xFF616161),
+                color = if (isUnlocked) ArmaColors.TextMid else Color(0xFF616161),
                 fontSize = 10.sp,
                 maxLines = 1
             )

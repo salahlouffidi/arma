@@ -420,3 +420,20 @@ fun ProStyledButton(
 }
 
 private fun lerpColor(a: Color, b: Color, f: Float) = androidx.compose.ui.graphics.lerp(a, b, f)
+
+
+/** Signature colour of each world/theme, used on round cards and banners. */
+fun themeAccent(theme: StageTheme): Color = when (theme) {
+    StageTheme.GARDEN -> Color(0xFF8BE36B)
+    StageTheme.DESERT -> Color(0xFFFFB74D)
+    StageTheme.JUNGLE -> Color(0xFF3DDC97)
+    StageTheme.MOUNTAINS -> Color(0xFFB0C8E0)
+    StageTheme.VOLCANO -> Color(0xFFFF6E40)
+    StageTheme.ICE -> Color(0xFF7FE7FF)
+    StageTheme.DARK_TEMPLE -> Color(0xFFD08CFF)
+    StageTheme.FINAL_ARENA -> Color(0xFFFFD45A)
+    StageTheme.NEON -> Color(0xFFFF4FD8)
+    StageTheme.OCEAN -> Color(0xFF4DD0E1)
+    StageTheme.CANDY -> Color(0xFFFF80AB)
+    StageTheme.COSMOS -> Color(0xFFA48BFF)
+}
