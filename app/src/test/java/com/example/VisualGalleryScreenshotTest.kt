@@ -24,6 +24,13 @@ import com.example.game.StageTheme
 import com.example.game.TableRenderer
 import com.example.game.Vector2
 import com.example.ui.MainMenuScreen
+import com.example.ui.GameModeSelectScreen
+import com.example.ui.PauseOverlay
+import com.example.ui.AudioSettingsDialog
+import com.example.ui.ArmadilloEscapeScreen
+import com.example.game.StageConfig
+import androidx.compose.ui.test.onNodeWithTag
+import androidx.compose.ui.test.performClick
 import com.example.ui.StageSelectScreen
 import com.example.ui.theme.ArmadilloEscapeTheme
 import com.github.takahirom.roborazzi.captureRoboImage
@@ -92,6 +99,40 @@ class VisualGalleryScreenshotTest {
             onSelectStage = {},
             onBackToMenu = {}
         )
+    }
+
+    @Test fun menu_mode_select() = capture("menu_mode_select") {
+        val ctx = LocalContext.current
+        GameModeSelectScreen(soundManager = SoundManager(ctx), onSelectSolo = {}, onSelectMultiplayer = {}, onBackToMenu = {})
+    }
+
+    @Test fun dialog_pause() = capture("dialog_pause") {
+        Box(Modifier.fillMaxSize().background(Color(0xFF140D08))) {
+            PauseOverlay(stage = StageConfig.getStage(5), onResume = {}, onSettings = {}, onRestart = {}, onExitToStages = {})
+        }
+    }
+
+    @Test fun dialog_audio() = capture("dialog_audio") {
+        val ctx = LocalContext.current
+        Box(Modifier.fillMaxSize().background(Color(0xFF140D08))) {
+            AudioSettingsDialog(soundManager = SoundManager(ctx), onDismiss = {})
+        }
+    }
+
+    /** Drives the real app flow: intro -> menu -> round select -> gameplay (HUD + joystick). */
+    @Test fun gameplay_hud() {
+        composeTestRule.mainClock.autoAdvance = false
+        composeTestRule.setContent { ArmadilloEscapeTheme { ArmadilloEscapeScreen() } }
+        composeTestRule.mainClock.advanceTimeBy(300)
+        composeTestRule.onNodeWithTag("skip_intro_button").performClick()
+        composeTestRule.mainClock.advanceTimeBy(600)
+        composeTestRule.onRoot().captureRoboImage(filePath = "src/test/screenshots/gallery/flow_1_menu.png")
+        composeTestRule.onNodeWithTag("menu_play_button").performClick()
+        composeTestRule.mainClock.advanceTimeBy(600)
+        composeTestRule.onRoot().captureRoboImage(filePath = "src/test/screenshots/gallery/flow_2_next.png")
+        composeTestRule.onNodeWithTag("round_card_1").performClick()
+        composeTestRule.mainClock.advanceTimeBy(1500)
+        composeTestRule.onRoot().captureRoboImage(filePath = "src/test/screenshots/gallery/flow_3_gameplay.png")
     }
 
     @Composable

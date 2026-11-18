@@ -16,6 +16,8 @@ import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
+import androidx.compose.foundation.layout.safeDrawingPadding
+import androidx.compose.material.icons.filled.Lock
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
@@ -76,48 +78,41 @@ fun StageSelectScreen(
 
     val highestUnlocked = progressManager.getHighestUnlockedStage()
 
-    Box(
-        modifier = Modifier
-            .fillMaxSize()
-            .background(
-                Brush.verticalGradient(
-                    colors = listOf(Color(0xFF221107), Color(0xFF160B04), Color(0xFF0C0502))
-                )
-            )
-            .statusBarsPadding()
-            .navigationBarsPadding()
-            .testTag("round_select_screen")
+    ProBackdrop(
+        modifier = Modifier.testTag("round_select_screen"),
+        theme = StageConfig.getStage(currentStageId).theme,
+        dim = 0.7f
     ) {
         Column(
-            modifier = Modifier.fillMaxSize().padding(horizontal = 14.dp, vertical = 8.dp)
+            modifier = Modifier.fillMaxSize().safeDrawingPadding().padding(horizontal = 14.dp, vertical = 8.dp)
         ) {
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Button(
+                ProButton(
+                    text = "MENU",
                     onClick = {
                         soundManager.playMenuClick()
                         onBackToMenu()
                     },
-                    colors = ButtonDefaults.buttonColors(
-                        containerColor = Color(0xFF331A0B), contentColor = Color(0xFFFFD54F)
-                    ),
-                    shape = RoundedCornerShape(12.dp),
-                    border = BorderStroke(1.dp, Color(0x60D4AF37)),
-                    modifier = Modifier.height(36.dp).testTag("round_select_back_button")
-                ) {
-                    Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back", modifier = Modifier.size(16.dp))
-                    Spacer(modifier = Modifier.width(4.dp))
-                    Text("MENU", fontSize = 11.sp, fontWeight = FontWeight.Bold)
-                }
-
-                Text(
-                    text = "🏆 16-ROUND CAMPAIGN • UNLOCKED: $highestUnlocked/16",
-                    color = Color(0xFFFFD700), fontSize = 14.sp,
-                    fontWeight = FontWeight.ExtraBold, letterSpacing = 0.5.sp
+                    style = ProButtonStyle.Secondary,
+                    height = 38.dp,
+                    fontSize = 11.sp,
+                    contentPadding = PaddingValues(horizontal = 14.dp),
+                    modifier = Modifier.testTag("round_select_back_button"),
+                    leading = { Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back", tint = ArmaColors.Gold, modifier = Modifier.size(16.dp)) }
                 )
+
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    Text(text = "SELECT ROUND", style = proTitleStyle(22.sp, 3.sp))
+                    Text(
+                        text = "CAMPAIGN PROGRESS  $highestUnlocked / 16",
+                        color = ArmaColors.TextLow, fontSize = 10.sp,
+                        fontWeight = FontWeight.Bold, letterSpacing = 1.5.sp
+                    )
+                }
 
                 Row(
                     horizontalArrangement = Arrangement.spacedBy(4.dp),
@@ -125,23 +120,17 @@ fun StageSelectScreen(
                 ) {
                     listOf("ALL (16)", "SOLO (01–08)", "DUAL (09–16)").forEachIndexed { index, label ->
                         val isSel = selectedFilter == index
-                        Surface(
-                            color = if (isSel) Color(0xFFD4AF37) else Color(0xFF261408),
-                            shape = RoundedCornerShape(8.dp),
-                            border = BorderStroke(1.dp, if (isSel) Color(0xFFFFD700) else Color(0x40D4AF37)),
-                            modifier = Modifier.clickable {
+                        ProButton(
+                            text = label,
+                            onClick = {
                                 soundManager.playMenuClick()
                                 selectedFilter = index
-                            }
-                        ) {
-                            Text(
-                                text = label,
-                                color = if (isSel) Color(0xFF1F0E04) else Color(0xFFFFE0B2),
-                                fontSize = 10.sp,
-                                fontWeight = if (isSel) FontWeight.Black else FontWeight.Bold,
-                                modifier = Modifier.padding(horizontal = 7.dp, vertical = 5.dp)
-                            )
-                        }
+                            },
+                            style = if (isSel) ProButtonStyle.Primary else ProButtonStyle.Ghost,
+                            height = 32.dp,
+                            fontSize = 10.sp,
+                            contentPadding = PaddingValues(horizontal = 10.dp)
+                        )
                     }
                 }
             }
@@ -149,7 +138,7 @@ fun StageSelectScreen(
             Spacer(modifier = Modifier.height(8.dp))
 
             LazyVerticalGrid(
-                columns = GridCells.Fixed(4),
+                columns = GridCells.Adaptive(minSize = 200.dp),
                 contentPadding = PaddingValues(bottom = 6.dp),
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
                 verticalArrangement = Arrangement.spacedBy(8.dp),
@@ -226,18 +215,41 @@ private fun RoundCard(
         preferences.getBoolean("single_joystick_right_round_${stage.id}", false)
     } else false
 
-    Surface(
-        color = bgColor,
-        shape = RoundedCornerShape(14.dp),
-        border = BorderStroke(if (isCurrent && isUnlocked) 2.dp else 1.dp, borderColor),
-        shadowElevation = if (isCurrent && isUnlocked) 6.dp else 1.dp,
+    ProPanel(
+        corner = 16.dp,
+        highlighted = isCurrent && isUnlocked,
+        accent = if (isCompleted && !isCurrent) ArmaColors.Green else ArmaColors.Gold,
         modifier = Modifier
             .fillMaxWidth()
             .then(if (isUnlocked) Modifier.clickable { onClick() } else Modifier)
             .testTag("round_card_${stage.id}")
     ) {
+      Column {
+        Box {
+            ThemePreview(
+                theme = stage.theme,
+                locked = !isUnlocked,
+                modifier = Modifier.fillMaxWidth().height(78.dp)
+            )
+            Box(
+                Modifier.matchParentSize().background(
+                    Brush.verticalGradient(listOf(Color.Transparent, Color(0xE0140A04)), startY = 60f)
+                )
+            )
+            Text(
+                text = stage.id.toString().padStart(2, '0'),
+                style = proTitleStyle(28.sp, 1.sp),
+                modifier = Modifier.align(Alignment.BottomStart).padding(start = 10.dp, bottom = 2.dp)
+            )
+            if (!isUnlocked) {
+                Icon(
+                    Icons.Default.Lock, contentDescription = "Locked", tint = ArmaColors.TextMid,
+                    modifier = Modifier.align(Alignment.Center).size(26.dp)
+                )
+            }
+        }
         Column(
-            modifier = Modifier.padding(10.dp),
+            modifier = Modifier.padding(horizontal = 10.dp, vertical = 8.dp),
             verticalArrangement = Arrangement.SpaceBetween
         ) {
             Row(
@@ -246,11 +258,6 @@ private fun RoundCard(
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text(
-                        text = if (isUnlocked) stage.icon else "🔒",
-                        fontSize = 18.sp
-                    )
-                    Spacer(modifier = Modifier.width(6.dp))
                     Text(
                         text = "ROUND ${stage.id.toString().padStart(2, '0')}",
                         color = when {
@@ -393,5 +400,6 @@ private fun RoundCard(
                 }
             }
         }
+      }
     }
 }

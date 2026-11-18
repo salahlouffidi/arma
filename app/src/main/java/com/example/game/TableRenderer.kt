@@ -11,6 +11,7 @@ import androidx.compose.ui.graphics.PathEffect
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.StrokeJoin
 import androidx.compose.ui.graphics.drawscope.DrawScope
+import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.drawscope.clipPath
 import androidx.compose.ui.graphics.drawscope.drawIntoCanvas
@@ -298,12 +299,13 @@ object TableRenderer {
         val specks: List<Triple<Offset, Float, Float>>
     )
 
-    private var cachedKey: List<Any>? = null
-    private var cachedBoard: Board? = null
+    private val boardCache = object : LinkedHashMap<List<Any>, Board>(24, 0.75f, true) {
+        override fun removeEldestEntry(eldest: MutableMap.MutableEntry<List<Any>, Board>?) = size > 20
+    }
 
     private fun boardLayout(left: Float, top: Float, width: Float, height: Float, theme: StageTheme): Board {
         val key = listOf(left, top, width, height, theme)
-        cachedBoard?.let { if (cachedKey == key) return it }
+        boardCache[key]?.let { return it }
 
         val rnd = java.util.Random(theme.ordinal * 7919L + 17L)
         val rows = (height / 105f).toInt().coerceIn(6, 14)
@@ -392,8 +394,7 @@ object TableRenderer {
         }
 
         val b = Board(boards, grain, knots, cracks, specks)
-        cachedKey = key
-        cachedBoard = b
+        boardCache[key] = b
         return b
     }
 
@@ -511,8 +512,11 @@ object TableRenderer {
         val layout = boardLayout(left, top, width, height, theme)
         clipPath(surface) {
             // boards
+            val avg = colors.plankColors.let { pc ->
+                Color(pc.map { it.red }.average().toFloat(), pc.map { it.green }.average().toFloat(), pc.map { it.blue }.average().toFloat())
+            }
             for ((rect, ci) in layout.boards) {
-                val base = colors.plankColors[ci % colors.plankColors.size]
+                val base = lerp(avg, colors.plankColors[ci % colors.plankColors.size], 0.45f)
                 drawRect(
                     brush = Brush.verticalGradient(
                         colors = listOf(base.lighten(0.06f), base, base.darken(0.08f)),
@@ -540,11 +544,13 @@ object TableRenderer {
                 }
             }
             // seams: dark groove + light lower lip
+            val seam = colors.seamColor.copy(alpha = min(colors.seamColor.alpha, 0.42f))
+            val seamHi = colors.seamHighlight.copy(alpha = min(colors.seamHighlight.alpha, 0.16f))
             for ((rect, _) in layout.boards) {
-                drawLine(colors.seamColor, Offset(rect.left, rect.top), Offset(rect.right, rect.top), strokeWidth = 2.2f)
-                drawLine(colors.seamHighlight, Offset(rect.left, rect.top + 1.8f), Offset(rect.right, rect.top + 1.8f), strokeWidth = 1f)
-                drawLine(colors.seamColor, Offset(rect.left, rect.top), Offset(rect.left, rect.bottom), strokeWidth = 2f)
-                drawLine(colors.seamHighlight, Offset(rect.left + 1.6f, rect.top), Offset(rect.left + 1.6f, rect.bottom), strokeWidth = 0.8f)
+                drawLine(seam, Offset(rect.left, rect.top), Offset(rect.right, rect.top), strokeWidth = 2.2f)
+                drawLine(seamHi, Offset(rect.left, rect.top + 1.8f), Offset(rect.right, rect.top + 1.8f), strokeWidth = 1f)
+                drawLine(seam, Offset(rect.left, rect.top), Offset(rect.left, rect.bottom), strokeWidth = 2f)
+                drawLine(seamHi, Offset(rect.left + 1.6f, rect.top), Offset(rect.left + 1.6f, rect.bottom), strokeWidth = 0.8f)
             }
 
             drawThemeSurfaceFx(this, theme, layout, center, left, top, width, height, t)
@@ -617,8 +623,8 @@ object TableRenderer {
         drawCircle(
             brush = Brush.radialGradient(
                 0f to Color.Black.copy(alpha = 0.0f),
-                0.85f to Color.Black.copy(alpha = 0.10f),
-                1f to Color.Black.copy(alpha = 0.22f),
+                0.85f to Color.Black.copy(alpha = 0.04f),
+                1f to Color.Black.copy(alpha = 0.10f),
                 center = c, radius = r
             ),
             radius = r, center = c
@@ -743,22 +749,7 @@ object TableRenderer {
                     style = Stroke(1.2f, pathEffect = PathEffect.dashPathEffect(floatArrayOf(10f, 6f)))
                 )
             }
-            StageTheme.JUNGLE, StageTheme.GARDEN -> {
-                // dappled light through leaves
-                val rnd = java.util.Random(theme.ordinal + 5L)
-                repeat(10) {
-                    val p = Offset(left + width * rnd.nextFloat(), top + height * rnd.nextFloat())
-                    val rr = 30f + rnd.nextFloat() * 60f
-                    val sway = sin(t * 0.8f + it) * 6f
-                    drawCircle(
-                        brush = Brush.radialGradient(
-                            0f to Color(0x1CFFF3C0), 1f to Color.Transparent,
-                            center = p + Offset(sway, 0f), radius = rr
-                        ),
-                        radius = rr, center = p + Offset(sway, 0f)
-                    )
-                }
-            }
+            else -> Unit
         }
     }
 
@@ -780,9 +771,9 @@ object TableRenderer {
                     Offset(left + width + rail * 0.4f, top + height + rail * 0.4f) to 215f
                 )
                 for ((p, base) in corners) {
-                    for (i in 0 until 5) {
-                        val ang = base + (i - 2) * 22f
-                        drawLeaf(this, p, ang, 34f + (i % 2) * 10f, leafA, leafB)
+                    for (i in 0 until 6) {
+                        val ang = base + (i - 2.5f) * 20f
+                        drawLeaf(this, p, ang, 52f + (i % 2) * 16f, leafA, leafB)
                     }
                 }
                 if (theme == StageTheme.GARDEN) {

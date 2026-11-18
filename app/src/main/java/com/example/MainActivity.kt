@@ -1,7 +1,6 @@
 package com.example
 
 import android.app.PictureInPictureParams
-import android.content.pm.ActivityInfo
 import android.content.pm.PackageManager
 import android.content.res.Configuration
 import android.os.Build
@@ -22,33 +21,39 @@ import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.unit.LayoutDirection
 import androidx.lifecycle.lifecycleScope
 import com.example.ads.AdManager
+import com.example.ads.ConsentManager
 import com.example.ui.ArmadilloEscapeScreen
 import com.example.ui.theme.ArmadilloEscapeTheme
 import com.google.android.gms.ads.MobileAds
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+import java.util.concurrent.atomic.AtomicBoolean
 
 class MainActivity : ComponentActivity() {
     private var isInPipMode by mutableStateOf(false)
     private var isGameplayActive by mutableStateOf(false)
+    private var privacyOptionsRequired by mutableStateOf(false)
     private lateinit var adManager: AdManager
+    private lateinit var consentManager: ConsentManager
+    private val mobileAdsInitStarted = AtomicBoolean(false)
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        // Strictly lock the visual game screen to fixed landscape orientation
-        requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE
+        // Orientation preference (landscape) is declared in the manifest; on large screens
+        // Android 16+ may ignore it, and the UI adapts to any size / orientation.
         enableEdgeToEdge()
 
-        adManager = AdManager(applicationContext)
-        lifecycleScope.launch(Dispatchers.IO) {
-            try {
-                MobileAds.initialize(this@MainActivity) {
-                    adManager.preload()
-                }
-            } catch (t: Throwable) {
-                // Safely handle environments without Google Play Services or AdServices
-            }
+        consentManager = ConsentManager(this)
+        adManager = AdManager(applicationContext) { consentManager.canRequestAds }
+
+        // UMP: refresh consent on every launch, then initialise ads only if allowed.
+        consentManager.gatherConsent(this) {
+            privacyOptionsRequired = consentManager.isPrivacyOptionsRequired
+            if (consentManager.canRequestAds) initializeMobileAdsOnce()
         }
+        // Consent obtained in a previous session: start loading in parallel.
+        if (consentManager.canRequestAds) initializeMobileAdsOnce()
 
         setContent {
             ArmadilloEscapeTheme {
@@ -61,11 +66,32 @@ class MainActivity : ComponentActivity() {
                             isInPip = isInPipMode,
                             onEnterPip = { enterPip() },
                             onSetGameplayActive = { updatePipParams(it) },
-                            adManager = adManager
+                            adManager = adManager,
+                            privacyOptionsRequired = privacyOptionsRequired,
+                            onOpenPrivacyOptions = { openPrivacyOptions() }
                         )
                     }
                 }
             }
+        }
+    }
+
+    private fun initializeMobileAdsOnce() {
+        if (!mobileAdsInitStarted.compareAndSet(false, true)) return
+        lifecycleScope.launch(Dispatchers.IO) {
+            try {
+                MobileAds.initialize(applicationContext) {}
+            } catch (t: Throwable) {
+                // Devices without Google Play services: game continues without ads.
+            }
+            withContext(Dispatchers.Main) { adManager.preload() }
+        }
+    }
+
+    private fun openPrivacyOptions() {
+        consentManager.showPrivacyOptionsForm(this) {
+            privacyOptionsRequired = consentManager.isPrivacyOptionsRequired
+            if (consentManager.canRequestAds) initializeMobileAdsOnce()
         }
     }
 
@@ -119,11 +145,5 @@ class MainActivity : ComponentActivity() {
     ) {
         super.onPictureInPictureModeChanged(isInPictureInPictureMode, newConfig)
         isInPipMode = isInPictureInPictureMode
-    }
-
-    override fun onConfigurationChanged(newConfig: Configuration) {
-        super.onConfigurationChanged(newConfig)
-        // Ensure orientation remains locked to landscape across system configuration changes
-        requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE
     }
 }

@@ -123,15 +123,15 @@ fun ArmadilloEscapeScreen(
     isInPip: Boolean = false,
     onEnterPip: (() -> Unit)? = null,
     onSetGameplayActive: ((Boolean) -> Unit)? = null,
-    adManager: AdManager? = null
+    adManager: AdManager? = null,
+    privacyOptionsRequired: Boolean = false,
+    onOpenPrivacyOptions: () -> Unit = {}
 ) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
 
-    val effectiveAdManager = remember(adManager) { adManager ?: AdManager(context.applicationContext) }
-    LaunchedEffect(effectiveAdManager) {
-        effectiveAdManager.preload()
-    }
+    // Ads are created/initialised by MainActivity after UMP consent; without one we run ad-free.
+    val effectiveAdManager = remember(adManager) { adManager ?: AdManager(context.applicationContext) { false } }
 
     val haptics = remember { HapticFeedbackHelper(context) }
     val progressManager = remember { StageProgressManager(context) }
@@ -298,7 +298,7 @@ fun ArmadilloEscapeScreen(
     // Audio lifecycle
     DisposableEffect(Unit) {
         onDispose {
-            soundManager.stopMusic()
+            soundManager.release()
         }
     }
 
@@ -373,7 +373,8 @@ fun ArmadilloEscapeScreen(
                 onOpenGameModeSelect = {
                     activeMatchConfig = MatchConfig.solo()
                     currentScreen = GameScreenState.STAGE_SELECT
-                }
+                },
+                onOpenPrivacyOptions = if (privacyOptionsRequired) onOpenPrivacyOptions else null
             )
         }
         GameScreenState.GAME_MODE_SELECT -> {
@@ -1199,7 +1200,7 @@ fun ArmadilloEscapeScreen(
                 data = goData,
                 statusMessage = adStatusMessage,
                 onRetryRound = {
-                    val activity = context as? Activity
+                    val activity = context.findActivity()
                     gameOverDialogData = null
                     adStatusMessage = null
                     val doResetAndStart = {
@@ -1227,7 +1228,7 @@ fun ArmadilloEscapeScreen(
                     }
                 },
                 onWatchAdSecondChance = {
-                    val activity = context as? Activity
+                    val activity = context.findActivity()
                     if (activity != null) {
                         effectiveAdManager.showRewarded(
                             activity = activity,
@@ -1246,7 +1247,7 @@ fun ArmadilloEscapeScreen(
                                 gameEngine.resetRound()
                             },
                             onUnavailable = {
-                                adStatusMessage = "Rewarded test ad unavailable. Tap RETRY!"
+                                adStatusMessage = "Ad unavailable right now. Tap RETRY!"
                             }
                         )
                     } else {
@@ -1901,4 +1902,11 @@ private fun GameOverDialog(
             }
         }
     }
+}
+
+/** Unwraps ContextWrapper chains so ads always receive the hosting Activity. */
+private tailrec fun android.content.Context.findActivity(): Activity? = when (this) {
+    is Activity -> this
+    is android.content.ContextWrapper -> baseContext.findActivity()
+    else -> null
 }
