@@ -16,3 +16,10 @@
 local.properties
 .env
 debug.keystore
+
+# iOS build outputs
+ios/.gradle/
+ios/build/
+ios/shared/build/
+ios/*.xcodeproj/
+ios/.kotlin/
