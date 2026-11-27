@@ -45,9 +45,9 @@ jobs:
 
       - name: Play a round in the simulator (UI test)
         run: |
-          set -uo pipefail
+          set +e
           UDID=$(xcrun simctl list devices available -j | python3 -c "import json,sys;d=json.load(sys.stdin)['devices'];print(next(x['udid'] for r in sorted(d,reverse=True) if 'iOS' in r for x in d[r] if 'Pro Max' in x['name']))")
-          xcrun simctl boot "$UDID"; xcrun simctl bootstatus "$UDID" -b
+          xcrun simctl boot "$UDID"; xcrun simctl bootstatus "$UDID" -b > /dev/null
           mkdir -p shots
           xcrun simctl spawn "$UDID" log stream --style compact --predicate 'process == "ArmaSnake"' > shots/app.log 2>&1 &
           LOGPID=$!
@@ -58,7 +58,7 @@ jobs:
           RESULT=$?
           cd ..
           kill $LOGPID || true
-          grep -E "Test Case|error:|failed|passed|stopped" ios/xcode-test.log | tail -n 15
+          grep -E "Test Case|error:|failed|passed|stopped|TREE|Assertion" ios/xcode-test.log | tail -n 40
           echo "----- Kotlin/crash lines -----"
           grep -iE "uncaught|exception|crash|terminat|fatal" shots/app.log | head -40 || true
           find ~/Library/Logs/DiagnosticReports -name "ArmaSnake*" -mmin -30 -exec head -80 {} \; || true

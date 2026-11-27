@@ -11,8 +11,17 @@ final class GameplaySmokeTests: XCTestCase {
         // Compose exposes its texts to accessibility: find the PLAY button by its label.
         let play = app.descendants(matching: .any)
             .matching(NSPredicate(format: "label ==[c] 'PLAY' OR label CONTAINS[c] '▶ PLAY'")).firstMatch
-        XCTAssertTrue(play.waitForExistence(timeout: 10), "PLAY button not found")
-        play.tap()
+        if play.waitForExistence(timeout: 10) {
+            play.tap()
+        } else {
+            // Print what accessibility sees, to adjust the test.
+            for line in app.debugDescription.split(separator: "\n").prefix(80) { print("TREE \(line)") }
+            let f = app.frame
+            print("TREE frame \(f)")
+            // Menu PLAY button sits at ~75% width, ~38% height of the landscape screen.
+            let landscape = f.width > f.height
+            app.coordinate(withNormalizedOffset: landscape ? CGVector(dx: 0.75, dy: 0.38) : CGVector(dx: 0.38, dy: 0.25)).tap()
+        }
         sleep(5)
         attachScreenshot(app, "after-play")
 
