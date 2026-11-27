@@ -35,7 +35,7 @@ open class Random(seed: Long = kotlin.random.Random.nextLong()) {
     private companion object {
         const val MULTIPLIER = 0x5DEECE66DL
         const val ADDEND = 0xBL
-        const val MASK = (1L shl 48) - 1
-        const val DOUBLE_UNIT = 1.0 / (1L shl 53)
+        const val MASK = 0xFFFFFFFFFFFFL
+        const val DOUBLE_UNIT = 1.1102230246251565E-16 // 1.0 / 2^53
     }
 }
