@@ -7,7 +7,11 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: read
+  contents: write
+
+concurrency:
+  group: ios-build
+  cancel-in-progress: true
 
 jobs:
   ios:
@@ -100,3 +104,11 @@ jobs:
           name: ARMASNAKE-ipa
           path: ios/build/ARMASNAKE-unsigned.ipa
           retention-days: 30
+
+      - name: Publish .ipa to the ios-ipa branch
+        run: |
+          mkdir pub && cp ios/build/ARMASNAKE-unsigned.ipa pub/ && cd pub
+          git init -q -b ios-ipa
+          git config user.name "github-actions"; git config user.email "github-actions@users.noreply.github.com"
+          git add ARMASNAKE-unsigned.ipa && git commit -qm "ARMASNAKE unsigned iOS build ${GITHUB_SHA::7}"
+          git push -f "https://x-access-token:${{ github.token }}@github.com/${{ github.repository }}.git" ios-ipa
