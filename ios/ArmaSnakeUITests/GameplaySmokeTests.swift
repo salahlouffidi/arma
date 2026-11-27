@@ -5,12 +5,14 @@ final class GameplaySmokeTests: XCTestCase {
     func testPlayRoundOneMinute() {
         let app = XCUIApplication()
         app.launch()
-        XCUIDevice.shared.orientation = .landscapeLeft
         sleep(12) // intro video, then menu
+        attachScreenshot(app, "menu")
 
-        let play = app.buttons["PLAY"].firstMatch
-        if play.waitForExistence(timeout: 5) { play.tap() }
-        else { app.coordinate(withNormalizedOffset: CGVector(dx: 0.75, dy: 0.38)).tap() } // PLAY button
+        // Compose exposes its texts to accessibility: find the PLAY button by its label.
+        let play = app.descendants(matching: .any)
+            .matching(NSPredicate(format: "label ==[c] 'PLAY' OR label CONTAINS[c] '▶ PLAY'")).firstMatch
+        XCTAssertTrue(play.waitForExistence(timeout: 10), "PLAY button not found")
+        play.tap()
         sleep(5)
         attachScreenshot(app, "after-play")
 

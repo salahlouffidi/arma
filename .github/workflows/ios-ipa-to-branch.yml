@@ -31,3 +31,4 @@ jobs:
           git add ARMASNAKE-unsigned.ipa
           git commit -qm "ARMASNAKE unsigned iOS build"
           git push -f "https://x-access-token:${{ github.token }}@github.com/${{ github.repository }}.git" ios-ipa
+# re-run: 2026-11-27T12:49:04Z
