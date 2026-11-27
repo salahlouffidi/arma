@@ -29,6 +29,10 @@ import androidx.compose.ui.ExperimentalComposeUiApi
 import com.example.game.SoundManager
 import platform.AVFoundation.AVLayerVideoGravityResizeAspect
 import platform.AVFoundation.AVPlayer
+import platform.AVFoundation.currentItem
+import platform.AVFoundation.pause
+import platform.AVFoundation.play
+import kotlinx.cinterop.readValue
 import platform.AVFoundation.AVPlayerItemDidPlayToEndTimeNotification
 import platform.AVFoundation.AVPlayerLayer
 import platform.Foundation.NSBundle
@@ -39,7 +43,7 @@ import platform.UIKit.UIColor
 import platform.UIKit.UIView
 
 /** UIView whose AVPlayerLayer always fills its bounds. */
-private class PlayerView(val player: AVPlayer) : UIView(frame = platform.CoreGraphics.CGRectZero) {
+private class PlayerView(val player: AVPlayer) : UIView(frame = platform.CoreGraphics.CGRectZero.readValue()) {
     private val playerLayer = AVPlayerLayer.playerLayerWithPlayer(player).apply {
         videoGravity = AVLayerVideoGravityResizeAspect
     }
@@ -103,7 +107,7 @@ fun IntroScreen(
             UIKitView(
                 factory = { PlayerView(player) },
                 modifier = Modifier.fillMaxSize(),
-                properties = UIKitInteropProperties(isInteractive = false)
+                properties = UIKitInteropProperties(interactionMode = null)
             )
         } else {
             LaunchedEffect(Unit) { finish() }
