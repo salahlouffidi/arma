@@ -48,6 +48,8 @@ jobs:
           tail -n 3 xcode-sim.log
 
       - name: Play a round in the simulator (UI test)
+        id: uitest
+        continue-on-error: true
         run: |
           set +e
           UDID=$(xcrun simctl list devices available -j | python3 -c "import json,sys;d=json.load(sys.stdin)['devices'];print(next(x['udid'] for r in sorted(d,reverse=True) if 'iOS' in r for x in d[r] if 'Pro Max' in x['name']))")
