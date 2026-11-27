@@ -17,7 +17,10 @@ jobs:
       - uses: gradle/actions/setup-gradle@v4
         with: { gradle-version: '8.14.3' }
       - name: Compile shared game code for iOS (klib)
-        run: gradle -p ios --no-daemon :shared:compileKotlinIosSimulatorArm64 2>&1 | tee build.log; test ${PIPESTATUS[0]} -eq 0
+        run: |
+          gradle -p ios --no-daemon :shared:compileKotlinIosSimulatorArm64 2>&1 | tee build.log
+          test ${PIPESTATUS[0]} -eq 0
       - name: Errors
         if: failure()
-        run: grep -E "^e: |error:" build.log | head -80
+        run: |
+          grep -E "^e: |error:" build.log | head -80
