@@ -11,8 +11,8 @@ open class Context {
     fun getSharedPreferences(name: String, mode: Int): SharedPreferences = IosSharedPreferences(name)
 
     open fun getSystemService(name: String): Any? = when (name) {
-        VIBRATOR_SERVICE -> android.os.Vibrator.default
-        VIBRATOR_MANAGER_SERVICE -> android.os.VibratorManager.default
+        VIBRATOR_SERVICE -> android.os.Vibrator.shared
+        VIBRATOR_MANAGER_SERVICE -> android.os.VibratorManager.shared
         else -> null
     }
 

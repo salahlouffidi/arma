@@ -37,7 +37,10 @@ jobs:
             -configuration Debug -sdk iphonesimulator \
             -destination 'generic/platform=iOS Simulator' \
             -derivedDataPath build/sim CODE_SIGNING_ALLOWED=NO build > xcode-sim.log 2>&1 \
-            || { grep -E "error:|Undefined symbol|ld: " xcode-sim.log | head -60; exit 1; }
+            || { grep -E "error:|Undefined symbol|ld: " xcode-sim.log | head -60;
+                 grep -oE "ArmaShared.h:[0-9]+" xcode-sim.log | sort -u | cut -d: -f2 | while read n; do
+                   echo "--- header line $n"; sed -n "$((n-2)),$((n+1))p" shared/build/bin/iosSimulatorArm64/debugFramework/ArmaShared.framework/Headers/ArmaShared.h; done
+                 exit 1; }
           tail -n 3 xcode-sim.log
 
       - name: Run in simulator and take screenshots

@@ -59,14 +59,14 @@ open class Vibrator {
     fun vibrate(milliseconds: Long) = vibrate(VibrationEffect.createOneShot(milliseconds, VibrationEffect.DEFAULT_AMPLITUDE))
     fun vibrate(pattern: LongArray, repeat: Int) = vibrate(VibrationEffect.createWaveform(pattern, repeat))
 
-    companion object { val default = Vibrator() }
+    companion object { val shared = Vibrator() }
 }
 
 open class VibratorManager {
-    val defaultVibrator: Vibrator get() = Vibrator.default
-    fun vibrate(vibration: CombinedVibration) = Vibrator.default.vibrate(vibration.effect)
+    val defaultVibrator: Vibrator get() = Vibrator.shared
+    fun vibrate(vibration: CombinedVibration) = Vibrator.shared.vibrate(vibration.effect)
 
-    companion object { val default = VibratorManager() }
+    companion object { val shared = VibratorManager() }
 }
 
 private object Taptic {
