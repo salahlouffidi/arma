@@ -1,7 +1,7 @@
 package com.example
 
 /** iOS counterpart of the Android R class for the raw audio/video files bundled with the app. */
-object R {
+internal object R {
     object raw {
         const val arma_snake = 0x7f0e0001
         const val stage_transition = 0x7f0e0002

@@ -43,6 +43,8 @@ targets:
         "FRAMEWORK_SEARCH_PATHS[sdk=iphonesimulator*]": $(SRCROOT)/shared/build/bin/iosSimulatorArm64/debugFramework
         "FRAMEWORK_SEARCH_PATHS[sdk=iphoneos*]": $(SRCROOT)/shared/build/bin/iosArm64/releaseFramework
         OTHER_LDFLAGS: ["-ObjC", "-framework", "ArmaShared"]
+        # Keep Xcode's DEBUG=1 macro away from the Kotlin header.
+        GCC_PREPROCESSOR_DEFINITIONS: ""
 schemes:
   ArmaSnake:
     build:
