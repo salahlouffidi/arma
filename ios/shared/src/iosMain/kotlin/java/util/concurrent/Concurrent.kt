@@ -14,6 +14,21 @@ class CopyOnWriteArrayList<E>() : AbstractMutableList<E>(), RandomAccess {
     override fun set(index: Int, element: E): E { val l = items.toMutableList(); val e = l.set(index, element); items = l; return e }
     override fun clear() { items = emptyList() }
     override fun addAll(elements: Collection<E>): Boolean { if (elements.isEmpty()) return false; items = items + elements; return true }
+    override fun remove(element: E): Boolean {
+        val i = items.indexOf(element)
+        if (i < 0) return false
+        items = items.toMutableList().apply { removeAt(i) }
+        return true
+    }
+    override fun removeAll(elements: Collection<E>): Boolean {
+        val n = items.size; items = items.filterNot { it in elements }; return items.size != n
+    }
+    override fun retainAll(elements: Collection<E>): Boolean {
+        val n = items.size; items = items.filter { it in elements }; return items.size != n
+    }
+    override fun contains(element: E): Boolean = items.contains(element)
+    override fun indexOf(element: E): Int = items.indexOf(element)
+    override fun lastIndexOf(element: E): Int = items.lastIndexOf(element)
     override fun iterator(): MutableIterator<E> = Snapshot(items)
     override fun listIterator(): MutableListIterator<E> = SnapshotList(items, 0)
     override fun listIterator(index: Int): MutableListIterator<E> = SnapshotList(items, index)
@@ -63,6 +78,8 @@ class ConcurrentLinkedQueue<E> : AbstractMutableCollection<E>() {
     override val size: Int get() = list.size
     override fun add(element: E): Boolean = list.add(element)
     override fun iterator(): MutableIterator<E> = list.iterator()
+    override fun remove(element: E): Boolean = list.remove(element)
+    override fun clear() = list.clear()
     fun poll(): E? = if (list.isEmpty()) null else list.removeAt(0)
     fun peek(): E? = list.firstOrNull()
     fun offer(e: E): Boolean = add(e)

@@ -43,25 +43,33 @@ jobs:
                  exit 1; }
           tail -n 3 xcode-sim.log
 
-      - name: Run in simulator and take screenshots
+      - name: Play a round in the simulator (UI test)
         run: |
-          set -euo pipefail
-          APP=ios/build/sim/Build/Products/Debug-iphonesimulator/ArmaSnake.app
+          set -uo pipefail
           UDID=$(xcrun simctl list devices available -j | python3 -c "import json,sys;d=json.load(sys.stdin)['devices'];print(next(x['udid'] for r in sorted(d,reverse=True) if 'iOS' in r for x in d[r] if 'Pro Max' in x['name']))")
           xcrun simctl boot "$UDID"; xcrun simctl bootstatus "$UDID" -b
-          xcrun simctl install "$UDID" "$APP"
           mkdir -p shots
-          PID=$(xcrun simctl launch "$UDID" com.aistudio.armadilloescape.xwqrpz | awk '{print $NF}')
-          echo "pid $PID"
-          sleep 12; xcrun simctl io "$UDID" screenshot shots/01-intro.png
-          sleep 18; xcrun simctl io "$UDID" screenshot shots/02-menu.png
-          if xcrun simctl spawn "$UDID" launchctl list | grep -q "armadilloescape"; then echo "APP RUNNING"; else echo "APP NOT RUNNING"; fi
-          find ~/Library/Logs/DiagnosticReports -name "ArmaSnake*" -newer "$APP" -exec cat {} \; | head -120 || true
-          for f in shots/*.png; do
-            sips -r 270 "$f" >/dev/null
+          xcrun simctl spawn "$UDID" log stream --style compact --predicate 'process == "ArmaSnake"' > shots/app.log 2>&1 &
+          LOGPID=$!
+          cd ios
+          xcodebuild test -project ArmaSnake.xcodeproj -scheme ArmaSnake -configuration Debug \
+            -destination "id=$UDID" -derivedDataPath build/sim -resultBundlePath build/ui.xcresult \
+            CODE_SIGN_IDENTITY=- CODE_SIGN_STYLE=Manual DEVELOPMENT_TEAM="" > xcode-test.log 2>&1
+          RESULT=$?
+          cd ..
+          kill $LOGPID || true
+          grep -E "Test Case|error:|failed|passed|stopped" ios/xcode-test.log | tail -n 15
+          echo "----- Kotlin/crash lines -----"
+          grep -iE "uncaught|exception|crash|terminat|fatal" shots/app.log | head -40 || true
+          find ~/Library/Logs/DiagnosticReports -name "ArmaSnake*" -mmin -30 -exec head -80 {} \; || true
+          xcrun xcresulttool export attachments --path ios/build/ui.xcresult --output-path shots/att >/dev/null 2>&1 || true
+          for f in shots/att/*.png; do
+            [ -f "$f" ] || continue
             sips -Z 640 -s format jpeg -s formatOptions 55 "$f" --out /tmp/p.jpg >/dev/null
             echo "PREVIEW $(basename "$f") $(base64 -i /tmp/p.jpg | tr -d '\n')"
           done
+          cat shots/att/manifest.json 2>/dev/null | head -c 1500 || true
+          exit $RESULT
 
       - uses: actions/upload-artifact@v4
         if: always()
@@ -70,6 +78,7 @@ jobs:
           path: |
             shots/
             ios/xcode-sim.log
+            ios/xcode-test.log
           retention-days: 14
 
       - name: Build unsigned device .ipa (sign with Sideloadly)

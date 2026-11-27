@@ -19,27 +19,31 @@ internal object System {
     fun currentTimeMillis(): Long = (NSDate().timeIntervalSince1970 * 1000.0).toLong()
 }
 
-/** Same signature as android.graphics.Canvas.drawText, drawn with Skia. */
+private val skiaTypefaces = HashMap<Boolean, org.jetbrains.skia.Typeface?>()
+private val skiaFonts = HashMap<Pair<Boolean, Float>, org.jetbrains.skia.Font>()
+private val skiaPaint = org.jetbrains.skia.Paint()
+
+/** Same signature as android.graphics.Canvas.drawText, drawn with Skia (fonts cached). */
 internal fun org.jetbrains.skia.Canvas.drawText(text: String, x: Float, y: Float, paint: android.graphics.Paint) {
     val bold = paint.typeface?.bold == true
-    val face = org.jetbrains.skia.FontMgr.default.matchFamilyStyle(
-        null,
-        if (bold) org.jetbrains.skia.FontStyle.BOLD else org.jetbrains.skia.FontStyle.NORMAL
-    )
-    val font = org.jetbrains.skia.Font(face, paint.textSize)
-    val width = font.measureTextWidth(text)
+    val font = skiaFonts.getOrPut(bold to paint.textSize) {
+        val face = skiaTypefaces.getOrPut(bold) {
+            org.jetbrains.skia.FontMgr.default.matchFamilyStyle(
+                null, if (bold) org.jetbrains.skia.FontStyle.BOLD else org.jetbrains.skia.FontStyle.NORMAL
+            )
+        }
+        org.jetbrains.skia.Font(face, paint.textSize)
+    }
     val startX = when (paint.textAlign) {
-        android.graphics.Paint.Align.CENTER -> x - width / 2f
-        android.graphics.Paint.Align.RIGHT -> x - width
+        android.graphics.Paint.Align.CENTER -> x - font.measureTextWidth(text) / 2f
+        android.graphics.Paint.Align.RIGHT -> x - font.measureTextWidth(text)
         android.graphics.Paint.Align.LEFT -> x
     }
-    val skPaint = org.jetbrains.skia.Paint().apply {
-        color = paint.color
-        isAntiAlias = paint.isAntiAlias || true
-        mode = if (paint.style == android.graphics.Paint.Style.STROKE) org.jetbrains.skia.PaintMode.STROKE else org.jetbrains.skia.PaintMode.FILL
-        strokeWidth = paint.strokeWidth
-    }
-    drawString(text, startX, y, font, skPaint)
+    skiaPaint.color = paint.color
+    skiaPaint.isAntiAlias = true
+    skiaPaint.mode = if (paint.style == android.graphics.Paint.Style.STROKE) org.jetbrains.skia.PaintMode.STROKE else org.jetbrains.skia.PaintMode.FILL
+    skiaPaint.strokeWidth = paint.strokeWidth
+    drawString(text, startX, y, font, skiaPaint)
 }
 
 /**

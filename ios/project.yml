@@ -45,11 +45,26 @@ targets:
         OTHER_LDFLAGS: ["-ObjC", "-framework", "ArmaShared"]
         # Keep Xcode's DEBUG=1 macro away from the Kotlin header.
         GCC_PREPROCESSOR_DEFINITIONS: ""
+  ArmaSnakeUITests:
+    type: bundle.ui-testing
+    platform: iOS
+    sources: [ArmaSnakeUITests]
+    dependencies:
+      - target: ArmaSnake
+    settings:
+      base:
+        GENERATE_INFOPLIST_FILE: YES
+        PRODUCT_BUNDLE_IDENTIFIER: com.aistudio.armadilloescape.uitests
+        TEST_TARGET_NAME: ArmaSnake
+        EXCLUDED_ARCHS[sdk=iphonesimulator*]: x86_64
 schemes:
   ArmaSnake:
     build:
       targets:
         ArmaSnake: all
+        ArmaSnakeUITests: [test]
+    test:
+      targets: [ArmaSnakeUITests]
     run:
       config: Debug
     archive:
