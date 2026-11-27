@@ -20,7 +20,6 @@ final class GameHostController: UIViewController {
         IosAds.shared.bridge = ads
         IosAppState.shared.openPrivacyOptions = { [weak self] in
             if let self { self.ads.showPrivacyOptions(from: self) }
-            return KotlinUnit()
         }
 
         let game = MainViewControllerKt.MainViewController()

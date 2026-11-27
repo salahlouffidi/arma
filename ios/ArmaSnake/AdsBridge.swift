@@ -80,30 +80,30 @@ final class AdsBridge: NSObject, AdBridge, FullScreenContentDelegate {
         loadRewarded()
     }
 
-    func showInterstitial(onDone: @escaping () -> KotlinUnit) {
+    func showInterstitial(onDone: @escaping () -> Void) {
         guard let ad = interstitial, let host = topController() else {
             loadInterstitial()
-            _ = onDone()
+            onDone()
             return
         }
         interstitial = nil
-        onInterstitialDone = { _ = onDone() }
+        onInterstitialDone = { onDone() }
         ad.present(from: host)
     }
 
-    func showRewarded(onReward: @escaping () -> KotlinUnit,
-                      onUnavailable: @escaping () -> KotlinUnit,
-                      onClosed: @escaping () -> KotlinUnit) {
+    func showRewarded(onReward: @escaping () -> Void,
+                      onUnavailable: @escaping () -> Void,
+                      onClosed: @escaping () -> Void) {
         guard let ad = rewarded, let host = topController() else {
             loadRewarded()
-            _ = onUnavailable()
+            onUnavailable()
             return
         }
         rewarded = nil
-        onRewardClosed = { _ = onClosed() }
-        onRewardUnavailable = { _ = onUnavailable() }
+        onRewardClosed = { onClosed() }
+        onRewardUnavailable = { onUnavailable() }
         ad.present(from: host) {
-            _ = onReward()
+            onReward()
         }
     }
 
